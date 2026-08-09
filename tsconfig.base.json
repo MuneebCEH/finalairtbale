@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2023"],
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+
+    "strict": true,
+    "noImplicitOverride": true,
+    "noUncheckedIndexedAccess": true,
+    "noPropertyAccessFromIndexSignature": false,
+    "exactOptionalPropertyTypes": false,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitReturns": true,
+    "forceConsistentCasingInFileNames": true,
+    "useUnknownInCatchVariables": true,
+
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "removeComments": false,
+    "importHelpers": false,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "skipLibCheck": true,
+
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+
+    // No `paths` aliasing to package sources.
+    //
+    // Aliasing `@tessera/*` straight at `packages/*/src` looks convenient, but it pulls every
+    // dependency's source files into each consumer's compilation unit — which breaks `rootDir`,
+    // recompiles shared code once per consumer, and lets a type error in one package surface as
+    // a confusing error in another. Instead each package emits real declarations to `dist`, and
+    // npm workspace symlinks resolve `@tessera/*` there. Turborepo's `dependsOn: ["^build"]`
+    // guarantees a dependency is built before anything that consumes it.
+    "baseUrl": "."
+  },
+  "exclude": ["node_modules", "dist", ".next", "coverage"]
+}

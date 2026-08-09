@@ -1,0 +1,102 @@
+{
+  "root": true,
+  "parser": "@typescript-eslint/parser",
+  "parserOptions": {
+    "ecmaVersion": 2022,
+    "sourceType": "module"
+  },
+  "plugins": ["@typescript-eslint", "import"],
+  "extends": [
+    "eslint:recommended",
+    "plugin:@typescript-eslint/recommended",
+    "plugin:import/typescript",
+    "prettier"
+  ],
+  "settings": {
+    "import/resolver": {
+      "typescript": { "project": ["./tsconfig.base.json"] }
+    }
+  },
+  "rules": {
+    "@typescript-eslint/no-explicit-any": "error",
+    "@typescript-eslint/explicit-module-boundary-types": "off",
+    "@typescript-eslint/no-unused-vars": [
+      "error",
+      { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }
+    ],
+    "@typescript-eslint/consistent-type-imports": [
+      "error",
+      { "prefer": "type-imports", "fixStyle": "inline-type-imports" }
+    ],
+    "no-console": ["error", { "allow": ["warn", "error"] }],
+    "eqeqeq": ["error", "always", { "null": "ignore" }],
+    "no-restricted-syntax": [
+      "error",
+      {
+        "selector": "NewExpression[callee.name='Function']",
+        "message": "Dynamic code construction is forbidden. See docs/07-formula-engine.md."
+      },
+      {
+        "selector": "CallExpression[callee.name='eval']",
+        "message": "eval() is forbidden anywhere in this codebase."
+      }
+    ],
+    "import/order": [
+      "error",
+      {
+        "groups": ["builtin", "external", "internal", "parent", "sibling", "index"],
+        "pathGroups": [{ "pattern": "@tessera/**", "group": "internal" }],
+        "newlines-between": "always",
+        "alphabetize": { "order": "asc", "caseInsensitive": true }
+      }
+    ],
+    "import/no-restricted-paths": [
+      "error",
+      {
+        "zones": [
+          {
+            "target": "./packages",
+            "from": "./apps",
+            "message": "packages/* must never import from apps/*."
+          },
+          {
+            "target": "./packages/ui",
+            "from": "./packages/database",
+            "message": "The UI layer must not touch data access."
+          },
+          {
+            "target": "./apps/web",
+            "from": "./apps/api",
+            "message": "The web app talks to the API over HTTP via @tessera/sdk only."
+          },
+          {
+            "target": "./apps/api/src/modules/*/domain",
+            "from": "./apps/api/src/modules/*/infra",
+            "message": "Domain code must not depend on infrastructure. Invert the dependency."
+          }
+        ]
+      }
+    ]
+  },
+  "overrides": [
+    {
+      // NestJS reads constructor parameter types from `design:paramtypes`, emitted by
+      // TypeScript's decorator metadata. A type-only import is erased at compile time, so the
+      // metadata degrades to `Object` and dependency injection fails at runtime with
+      // "Nest can't resolve dependencies". The rule's autofix cannot tell an injected class from
+      // an ordinary type, so it is disabled here rather than fought file by file.
+      "files": ["apps/api/**/*.ts", "apps/worker/**/*.ts"],
+      "rules": {
+        "@typescript-eslint/consistent-type-imports": "off"
+      }
+    },
+    {
+      "files": ["**/*.test.ts", "**/*.spec.ts", "**/test/**", "packages/testing/**"],
+      "rules": {
+        "@typescript-eslint/no-explicit-any": "off",
+        "no-console": "off"
+      }
+    }
+  ],
+  "ignorePatterns": ["node_modules", "dist", ".next", "coverage", "*.js", "*.mjs", "*.cjs"]
+}

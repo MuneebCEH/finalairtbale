@@ -1,0 +1,169 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Design tokens.
+ *
+ * Light is the default; dark is applied by `[data-theme='dark']` on <html>, which a tiny inline
+ * script sets before first paint (see ThemeScript) so there is no flash of the wrong theme.
+ * `prefers-color-scheme` is honoured only when the user has not chosen explicitly.
+ *
+ * Colours are stored as space-separated RGB channels so Tailwind's `<alpha-value>` works, which
+ * is what lets one token serve both `bg-accent` and `bg-accent/10`.
+ */
+
+@layer base {
+  :root {
+    --surface-canvas: 249 250 251;
+    --surface-default: 255 255 255;
+    --surface-raised: 255 255 255;
+    --surface-sunken: 243 244 246;
+    --surface-overlay: 255 255 255;
+
+    --text-primary: 17 24 39;
+    --text-secondary: 75 85 99;
+    --text-tertiary: 130 138 152;
+    --text-inverted: 255 255 255;
+
+    --border-default: 226 230 236;
+    --border-strong: 203 209 218;
+    --border-subtle: 238 241 245;
+
+    /* A deep teal. Distinct from the blues and oranges that saturate this product category,
+       and it holds contrast against both light and dark surfaces without adjustment. */
+    --accent-default: 13 115 119;
+    --accent-hover: 10 94 97;
+    --accent-subtle: 232 246 246;
+    --accent-text: 8 79 82;
+
+    --success-default: 22 128 84;
+    --success-subtle: 232 246 239;
+    --success-text: 17 94 62;
+
+    --warning-default: 180 106 12;
+    --warning-subtle: 252 244 229;
+    --warning-text: 133 77 14;
+
+    --danger-default: 190 44 55;
+    --danger-subtle: 253 236 237;
+    --danger-text: 148 33 42;
+
+    --shadow-color: 15 23 42;
+
+    --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    --font-mono: ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, monospace;
+  }
+
+  :root[data-theme='dark'] {
+    --surface-canvas: 13 16 21;
+    --surface-default: 20 24 31;
+    --surface-raised: 27 32 41;
+    --surface-sunken: 15 18 24;
+    --surface-overlay: 27 32 41;
+
+    --text-primary: 235 238 243;
+    --text-secondary: 165 173 186;
+    --text-tertiary: 122 131 145;
+    --text-inverted: 13 16 21;
+
+    --border-default: 42 49 61;
+    --border-strong: 60 69 84;
+    --border-subtle: 32 38 48;
+
+    --accent-default: 45 176 168;
+    --accent-hover: 66 197 188;
+    --accent-subtle: 20 45 48;
+    --accent-text: 122 224 216;
+
+    --success-default: 52 168 111;
+    --success-subtle: 18 42 32;
+    --success-text: 110 214 162;
+
+    --warning-default: 214 149 46;
+    --warning-subtle: 45 35 17;
+    --warning-text: 240 190 110;
+
+    --danger-default: 226 91 100;
+    --danger-subtle: 48 22 25;
+    --danger-text: 248 154 160;
+
+    --shadow-color: 0 0 0;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    @apply bg-canvas text-primary font-sans text-base antialiased;
+  }
+
+  /*
+   * Focus visibility.
+   *
+   * The default outline is removed only where a ring replaces it, and `:focus-visible` is used
+   * so a mouse click does not leave a ring behind while keyboard navigation always shows one.
+   * WCAG 2.2 raised the bar here (2.4.11 Focus Not Obscured, 2.4.13 Focus Appearance): the ring
+   * is 2px with a 2px offset so it stays visible against adjacent elements.
+   */
+  :focus-visible {
+    @apply outline-none ring-2 ring-accent ring-offset-2 ring-offset-surface;
+  }
+
+  ::selection {
+    background-color: rgb(var(--accent-default) / 0.22);
+  }
+
+  /* Scrollbars that do not fight the theme. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(var(--border-strong)) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  *::-webkit-scrollbar-thumb {
+    background-color: rgb(var(--border-strong));
+    border-radius: 6px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+@layer utilities {
+  /*
+   * Honour the operating system's reduced-motion preference.
+   *
+   * Not merely faster: animation is reduced to a near-instant transition rather than removed, so
+   * state changes remain perceptible for users who rely on them, without the vestibular cost.
+   */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
+  /* Visible only to screen readers — used for live-region announcements and skip links. */
+  .sr-only-focusable:not(:focus):not(:focus-within) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+  }
+}

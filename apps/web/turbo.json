@@ -1,0 +1,18 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "extends": ["//"],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "env": ["NEXT_BUILD_DIR", "NEXT_PUBLIC_API_URL"],
+      "outputs": [".next-build/**", "!.next-build/cache/**"]
+    },
+    "typecheck": {
+      // Next generates `.next/types/**` (typed routes, page prop shapes) during a build, and
+      // tsconfig includes them. Without this dependency turbo is free to run typecheck in
+      // parallel with build, and tsc fails on generated files that do not exist yet.
+      "dependsOn": ["build"],
+      "outputs": []
+    }
+  }
+}

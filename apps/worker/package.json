@@ -1,0 +1,28 @@
+{
+  "name": "@tessera/worker",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx watch src/main.ts",
+    "start": "node dist/main.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint src --ext .ts",
+    "_comment:test:unit": "No unit tests yet — the worker's job handlers are exercised through the integration suite. See apps/api/package.json for the same note.",
+    "test:unit": "vitest run --passWithNoTests",
+    "clean": "rimraf dist .turbo"
+  },
+  "dependencies": {
+    "@tessera/config": "*",
+    "@tessera/database": "*",
+    "@tessera/logger": "*",
+    "@tessera/types": "*",
+    "bullmq": "^5.20.0",
+    "ioredis": "^5.4.1"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.2"
+  }
+}

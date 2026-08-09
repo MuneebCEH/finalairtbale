@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "./src",
+    "outDir": "./dist",
+    "declaration": false,
+    "declarationMap": false,
+    "types": ["node"]
+  },
+  // Tests are deliberately not here: `rootDir` is `src`, so including them made the build config
+  // unsatisfiable the moment a test file existed. They are typechecked by `tsconfig.test.json`,
+  // which drops `rootDir` because it emits nothing.
+  "include": ["src/**/*.ts"]
+}

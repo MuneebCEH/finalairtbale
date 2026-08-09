@@ -1,0 +1,22 @@
+{
+  "name": "@tessera/storage",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --build tsconfig.json",
+    "lint": "eslint src --ext .ts",
+    "test:unit": "vitest run",
+    "clean": "rimraf dist .turbo"
+  },
+  "dependencies": {
+    "@tessera/types": "*"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.2"
+  },
+  "files": ["dist"]
+}

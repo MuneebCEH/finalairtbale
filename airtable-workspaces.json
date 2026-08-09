@@ -1,0 +1,37 @@
+{
+  "_comment": [
+    "Which Tessera workspace each Airtable base is imported into.",
+    "",
+    "Airtable's API does not expose which workspace a base belongs to, so this cannot be",
+    "detected — it has to be stated. The workspace names below are the real ones from the",
+    "Airtable account; the base-to-workspace assignments are a best guess from the names and",
+    "should be corrected where wrong. Open Airtable, look at which workspace each base sits in,",
+    "and edit the value here to match.",
+    "",
+    "Workspaces are matched by name, case-insensitively, and created only if absent — so fixing",
+    "an entry and re-running moves nothing that is already correct.",
+    "",
+    "Airtable workspaces in this account:",
+    "  delta med LLC | oxford backup | MEDX BACKUP | new oexford | Medx | My First Workspace"
+  ],
+
+  "default": "Imported from Airtable",
+
+  "byBaseId": {
+    "appR9JDSnX5vSkDSG": "delta med LLC",
+    "app46gLXAy2HSAojv": "oxford backup",
+    "appZ2NclqQpm2Tvbc": "MEDX BACKUP",
+    "app8yChOFyShvlsqm": "delta med LLC",
+    "appu3ZznP4DuPXCLT": "delta med LLC",
+    "appuC9JsWnrUkGwiH": "My First Workspace"
+  },
+
+  "_baseNames": {
+    "appR9JDSnX5vSkDSG": "DELTA MED LLC BACKUP (15 tables)",
+    "app46gLXAy2HSAojv": "Oxford Backup (12 tables)",
+    "appZ2NclqQpm2Tvbc": "MEDX BACKUP (13 tables)",
+    "app8yChOFyShvlsqm": "Delta Medical portal Old (11 tables)",
+    "appu3ZznP4DuPXCLT": "Delta Medical portal Old (Copy) (11 tables)",
+    "appuC9JsWnrUkGwiH": "Untitled Base (1 table)"
+  }
+}

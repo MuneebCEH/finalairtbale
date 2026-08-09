@@ -1,0 +1,57 @@
+# syntax=docker/dockerfile:1.7
+# Worker image. Same shape as the API image; a different entrypoint and no exposed port.
+#
+# One image serves every queue: WORKER_QUEUES selects which to run, so a CPU-tuned compute fleet
+# and an IO-tuned delivery fleet are the same artifact with different environment. Separate
+# images per queue would multiply the build matrix and the ways deployments drift apart.
+
+FROM node:20.18-bookworm-slim AS deps
+WORKDIR /app
+ENV npm_config_update_notifier=false
+
+COPY package.json package-lock.json ./
+COPY packages/types/package.json       packages/types/
+COPY packages/config/package.json      packages/config/
+COPY packages/validation/package.json  packages/validation/
+COPY packages/logger/package.json      packages/logger/
+COPY packages/permissions/package.json packages/permissions/
+COPY packages/database/package.json    packages/database/
+COPY packages/auth/package.json        packages/auth/
+COPY apps/worker/package.json          apps/worker/
+
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --workspaces --include-workspace-root --omit=optional
+
+FROM deps AS build
+WORKDIR /app
+COPY tsconfig.base.json turbo.json ./
+COPY packages/ packages/
+COPY apps/worker/ apps/worker/
+
+RUN npx prisma generate --schema packages/database/prisma/schema.prisma \
+ && npx turbo run build --filter=@tessera/worker...
+
+RUN npm prune --omit=dev --workspaces --include-workspace-root
+
+FROM node:20.18-bookworm-slim AS runtime
+WORKDIR /app
+
+ENV NODE_ENV=production \
+    NODE_OPTIONS=--enable-source-maps \
+    WORKER_QUEUES=maintenance \
+    WORKER_CONCURRENCY=4
+
+RUN groupadd --system --gid 1001 tessera \
+ && useradd  --system --uid 1001 --gid tessera tessera
+
+COPY --from=build --chown=tessera:tessera /app/node_modules          ./node_modules
+COPY --from=build --chown=tessera:tessera /app/packages              ./packages
+COPY --from=build --chown=tessera:tessera /app/apps/worker/dist      ./apps/worker/dist
+COPY --from=build --chown=tessera:tessera /app/apps/worker/package.json ./apps/worker/
+
+USER tessera
+
+# A worker has no port to probe. Liveness is inferred from queue heartbeats and the process
+# exiting on an unhandled rejection, which is deliberate: a wedged worker should die and be
+# replaced rather than sit consuming a slot.
+CMD ["node", "apps/worker/dist/main.js"]

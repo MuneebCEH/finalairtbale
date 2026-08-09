@@ -1,0 +1,71 @@
+# syntax=docker/dockerfile:1.7
+# ---------------------------------------------------------------------------
+# API image.
+#
+# Layer order is chosen so that the expensive step (dependency install) is cached on the
+# lockfile alone: changing application source rebuilds seconds, not minutes.
+#
+# The runtime stage carries no package manager, no compiler, and no shell tooling — only Node
+# and the built output. Anything an attacker could use to pivot is simply not in the image.
+# ---------------------------------------------------------------------------
+
+FROM node:20.18-bookworm-slim AS deps
+WORKDIR /app
+ENV npm_config_update_notifier=false
+
+# Only the manifests, so this layer is invalidated by dependency changes and nothing else.
+COPY package.json package-lock.json ./
+COPY packages/types/package.json         packages/types/
+COPY packages/config/package.json        packages/config/
+COPY packages/validation/package.json    packages/validation/
+COPY packages/logger/package.json        packages/logger/
+COPY packages/permissions/package.json   packages/permissions/
+COPY packages/database/package.json      packages/database/
+COPY packages/auth/package.json          packages/auth/
+COPY apps/api/package.json               apps/api/
+
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --workspaces --include-workspace-root --omit=optional
+
+# ---------------------------------------------------------------------------
+FROM deps AS build
+WORKDIR /app
+COPY tsconfig.base.json turbo.json ./
+COPY packages/ packages/
+COPY apps/api/ apps/api/
+
+RUN npx prisma generate --schema packages/database/prisma/schema.prisma \
+ && npx turbo run build --filter=@tessera/api...
+
+# Drops development dependencies from the tree that will be copied forward.
+RUN npm prune --omit=dev --workspaces --include-workspace-root
+
+# ---------------------------------------------------------------------------
+FROM node:20.18-bookworm-slim AS runtime
+WORKDIR /app
+
+ENV NODE_ENV=production \
+    NODE_OPTIONS=--enable-source-maps \
+    npm_config_update_notifier=false
+
+# A dedicated unprivileged user. Running as root inside a container is a needless escalation
+# path if a mount or a kernel bug ever lets a process out.
+RUN groupadd --system --gid 1001 tessera \
+ && useradd  --system --uid 1001 --gid tessera tessera
+
+COPY --from=build --chown=tessera:tessera /app/node_modules      ./node_modules
+COPY --from=build --chown=tessera:tessera /app/packages          ./packages
+COPY --from=build --chown=tessera:tessera /app/apps/api/dist     ./apps/api/dist
+COPY --from=build --chown=tessera:tessera /app/apps/api/package.json ./apps/api/
+
+USER tessera
+EXPOSE 4000
+
+# Kubernetes probes are the real health signal; this exists so `docker run` and Compose behave
+# sensibly too.
+HEALTHCHECK --interval=15s --timeout=3s --start-period=20s --retries=3 \
+  CMD node -e "fetch('http://127.0.0.1:4000/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+
+# No shell form and no init wrapper: PID 1 is Node, so SIGTERM reaches the process directly and
+# the graceful-shutdown hooks actually run.
+CMD ["node", "apps/api/dist/main.js"]

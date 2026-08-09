@@ -1,0 +1,18 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "extends": ["//"],
+  "tasks": {
+    "db:generate": {
+      // Keyed on the schema alone, so the generator runs when the schema changes and not once
+      // per build. Regenerating unconditionally also fails on Windows whenever a dev server is
+      // running, because the query-engine DLL is memory-mapped and cannot be replaced in place.
+      "inputs": ["prisma/schema.prisma"],
+      "outputs": ["../../node_modules/.prisma/client/**"],
+      "cache": true
+    },
+    "build": {
+      "dependsOn": ["^build", "db:generate"],
+      "outputs": ["dist/**"]
+    }
+  }
+}

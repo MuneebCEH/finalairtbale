@@ -1,0 +1,10 @@
+{
+  // Typechecks the tests alongside the sources. Separate from `tsconfig.json` because that one
+  // pins `rootDir` to `src` for the build output layout, and tests live outside it.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["node", "vitest/globals"]
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts"]
+}

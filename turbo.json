@@ -1,0 +1,52 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "globalDependencies": [".env", "tsconfig.base.json"],
+  "globalEnv": ["NODE_ENV", "CI"],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "lint": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", "src/**", "test/**", "*.json", "*.{js,cjs,mjs,ts}"],
+      "outputs": []
+    },
+    "typecheck": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", "src/**", "test/**", "tsconfig*.json"],
+      "outputs": []
+    },
+    "test:unit": {
+      "dependsOn": ["^build"],
+      /*
+       * Declared explicitly, and not left to the default, because the default input set is derived
+       * from git — and this working tree is not a git repository. Adding a test file therefore did
+       * not change the task hash, so `turbo` replayed a cached "No test files found" log and the
+       * suite reported success without running anything. A verification step that cannot fail is
+       * worse than no verification step, because it is believed.
+       */
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "src/**",
+        "test/**",
+        "prisma/**",
+        "vitest.config.*",
+        "package.json"
+      ],
+      "outputs": ["coverage/**"]
+    },
+    "test:integration": {
+      "dependsOn": ["^build"],
+      "cache": false,
+      "outputs": []
+    },
+    "clean": {
+      "cache": false
+    }
+  }
+}
