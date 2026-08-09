@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { envSchema } from '../src/env';
+import { envSchema, loadEnv } from '../src/env';
 
 /**
  * The environment schema is the last thing standing between a misconfigured deployment and a
@@ -175,5 +175,26 @@ describe('envSchema', () => {
     expect(paths).toContain('API_PORT');
     expect(paths).toContain('SESSION_SECRET');
     expect(paths).toContain('DATABASE_URL');
+  });
+});
+
+describe('the PORT alias', () => {
+  /**
+   * Passenger — which is what cPanel's Node.js applications run under — and every
+   * platform-as-a-service hand the port to the process as `PORT`. Reading only `API_PORT` meant
+   * the app ignored the port it had been given and bound its own default, which on a shared host
+   * is either already taken or firewalled. The symptom is indistinguishable from a crash at boot.
+   */
+  it('uses PORT when API_PORT is absent', () => {
+    expect(loadEnv({ ...VALID, PORT: '8080' } as NodeJS.ProcessEnv, true).API_PORT).toBe(8080);
+  });
+
+  it('prefers an explicit API_PORT over PORT', () => {
+    const env = loadEnv({ ...VALID, PORT: '8080', API_PORT: '4000' } as NodeJS.ProcessEnv, true);
+    expect(env.API_PORT).toBe(4000);
+  });
+
+  it('falls back to the default when neither is set', () => {
+    expect(loadEnv({ ...VALID } as NodeJS.ProcessEnv, true).API_PORT).toBe(4000);
   });
 });

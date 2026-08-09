@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { Global, Module, type OnApplicationShutdown } from '@nestjs/common';
 import { loadEnv, type Env } from '@tessera/config';
 import { createLogger, type Logger } from '@tessera/logger';
-import { LocalFilesystemStorage, type StoragePort } from '@tessera/storage';
+import { LocalFilesystemStorage, S3Storage, type StoragePort } from '@tessera/storage';
 import Redis from 'ioredis';
 
 import { MailerService } from './mailer.service';
@@ -99,6 +99,23 @@ import { ENV, LOGGER, REDIS, STORAGE } from './tokens';
             `${env.API_URL}/files`,
           );
         }
+        if (env.STORAGE_DRIVER === 's3') {
+          // One adapter for every S3-compatible provider. `STORAGE_ENDPOINT` is what selects
+          // between them: unset for AWS, set for Cloudflare R2, Backblaze B2 or MinIO.
+          logger.info('attachment storage: s3', {
+            bucket: env.STORAGE_BUCKET,
+            endpoint: env.STORAGE_ENDPOINT ?? 'aws',
+          });
+          return new S3Storage({
+            bucket: env.STORAGE_BUCKET,
+            region: env.STORAGE_REGION,
+            endpoint: env.STORAGE_ENDPOINT,
+            accessKeyId: env.STORAGE_ACCESS_KEY_ID as string,
+            secretAccessKey: env.STORAGE_SECRET_ACCESS_KEY as string,
+            forcePathStyle: env.STORAGE_FORCE_PATH_STYLE,
+          });
+        }
+
         throw new Error(
           `Storage driver "${env.STORAGE_DRIVER}" is configured but its adapter is not wired up yet.`,
         );

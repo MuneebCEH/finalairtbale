@@ -12,11 +12,15 @@
     "clean": "rimraf dist .turbo"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1106.0",
+    "@aws-sdk/s3-request-presigner": "^3.1106.0",
     "@tessera/types": "*"
   },
   "devDependencies": {
     "typescript": "^5.6.3",
     "vitest": "^2.1.2"
   },
-  "files": ["dist"]
+  "files": [
+    "dist"
+  ]
 }

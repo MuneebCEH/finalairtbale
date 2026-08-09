@@ -55,6 +55,14 @@ export const envSchema = z
     APP_NAME: z.string().default('Tessera'),
     APP_URL: z.string().url(),
     API_URL: z.string().url(),
+    /**
+     * The port the API listens on.
+     *
+     * `PORT` is accepted as an alias because that is what every platform-as-a-service and
+     * Passenger — which is what cPanel's Node.js apps run under — sets. Reading only `API_PORT`
+     * meant the app ignored the port it had been handed and bound its own default, which on a
+     * shared host is either taken or firewalled.
+     */
     API_PORT: int(1, 65535).default(4000),
     WEB_PORT: int(1, 65535).default(3000),
     CORS_ORIGINS: csv.default('http://localhost:3000'),
@@ -230,7 +238,16 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env, force = false):
 
   if (source === process.env) loadDotenv();
 
-  const result = envSchema.safeParse(source);
+  // `PORT` is the name every host hands the application: Passenger, which is what cPanel's
+  // Node.js apps run under, and every platform-as-a-service. Without this the app read only
+  // `API_PORT`, ignored the port it had been given, and bound its own default — which on a
+  // shared host is either already taken or firewalled, and looks like the app failed to start.
+  //
+  // The explicit setting still wins, so a deployment that sets both gets what it asked for.
+  const withPortAlias =
+    source['PORT'] && !source['API_PORT'] ? { ...source, API_PORT: source['PORT'] } : source;
+
+  const result = envSchema.safeParse(withPortAlias);
   if (!result.success) {
     throw new EnvironmentValidationError(result.error.issues);
   }
