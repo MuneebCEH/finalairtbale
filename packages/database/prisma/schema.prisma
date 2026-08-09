@@ -19,6 +19,16 @@
 generator client {
   provider        = "prisma-client-js"
   previewFeatures = ["relationJoins"]
+
+  // The query engine is a native binary, and the default — `native` alone — builds only for the
+  // machine that ran `prisma generate`. Generating on Windows or macOS and deploying to Linux
+  // then fails at the first query with an error that names a missing engine file rather than the
+  // platform mismatch that caused it.
+  //
+  // The Linux targets differ by OpenSSL version, not distribution: `1.0.x` covers CentOS 7 and
+  // its derivatives, `3.0.x` covers AlmaLinux/Rocky 9 and Debian 12, which is what the Docker
+  // images are built on.
+  binaryTargets = ["native", "rhel-openssl-1.0.x", "rhel-openssl-3.0.x", "debian-openssl-3.0.x"]
 }
 
 datasource db {
