@@ -78,6 +78,10 @@ services:
       # produce attachment links that resolve on the server and 404 in the browser.
       PUBLIC_API_URL: https://${DOMAIN:?set DOMAIN in .env.prod}/api
       PUBLIC_WEB_URL: https://${DOMAIN}
+    # Bound to loopback, not 0.0.0.0. The panel's web server reaches it over localhost; the
+    # internet cannot reach it at all, so the API is never exposed without TLS in front of it.
+    ports:
+      - '127.0.0.1:${API_PORT:-4000}:4000'
     volumes:
       - attachments:/app/apps/api/.local/attachments
     depends_on:
@@ -119,10 +123,22 @@ services:
       NODE_ENV: production
       PORT: 3000
       NEXT_PUBLIC_API_URL: https://${DOMAIN}/api
+    ports:
+      - '127.0.0.1:${WEB_PORT:-3000}:3000'
     depends_on:
       - api
 
+  # ---------------------------------------------------------------------------
+  # The bundled proxy is opt-in: `--profile standalone`.
+  #
+  # On a bare VPS it is what terminates TLS. On a server that already runs cPanel, WHM or any
+  # other panel, ports 80 and 443 are taken — starting this there does not merely fail, it can
+  # take every other site on the box down with it. The default is therefore to publish the app
+  # on loopback only (see the port mappings above) and let the panel's own web server front it,
+  # reusing the certificate it already issues for the domain.
+  # ---------------------------------------------------------------------------
   proxy:
+    profiles: ['standalone']
     image: caddy:2.8-alpine
     restart: unless-stopped
     ports:

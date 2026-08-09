@@ -71,6 +71,57 @@ docker compose --env-file .env.prod -f docker-compose.prod.yml ps
 Then open `https://airtable.cloudxhosting.us`. Caddy obtains the certificate on first request; if
 that fails, the domain's A record has not propagated yet.
 
+## On a VPS that already runs cPanel or WHM
+
+The panel already owns ports 80 and 443 and already issues a certificate for the domain, so the
+bundled Caddy proxy is left out — that is why it sits behind a `standalone` profile and does not
+start by default. Bringing it up on such a box does not just fail to bind; it can take every other
+site on the server down with it.
+
+Docker is still the right way to run the app here, and on an older host it is the *easier* way:
+Node 20 and Postgres 16 come from the images, so nothing has to be installed from a distribution
+whose repositories may no longer be maintained.
+
+Run the stack exactly as above. It publishes the web app on `127.0.0.1:3000` and the API on
+`127.0.0.1:4000` — reachable from the server itself, and from nowhere else.
+
+Then point the domain at it. In **WHM → Apache Configuration → Include Editor →
+Pre VirtualHost Include**, add:
+
+```apache
+<VirtualHost *:443>
+    ServerName airtable.cloudxhosting.us
+    SSLEngine on
+
+    ProxyPreserveHost On
+    # The API first: a general rule for "/" would swallow these before they matched.
+    ProxyPass        /api/  http://127.0.0.1:4000/
+    ProxyPassReverse /api/  http://127.0.0.1:4000/
+    ProxyPass        /files/ http://127.0.0.1:4000/files/
+    ProxyPassReverse /files/ http://127.0.0.1:4000/files/
+
+    # Realtime collaboration needs the upgrade to pass through; without this the socket falls
+    # back to polling and presence stops working.
+    RewriteEngine On
+    RewriteCond %{HTTP:Upgrade} =websocket [NC]
+    RewriteRule /(.*) ws://127.0.0.1:4000/$1 [P,L]
+
+    ProxyPass        /  http://127.0.0.1:3000/
+    ProxyPassReverse /  http://127.0.0.1:3000/
+</VirtualHost>
+```
+
+Rebuild the configuration and restart:
+
+```bash
+/scripts/rebuildhttpdconf && systemctl restart httpd
+```
+
+Two things worth knowing before you start. Installing Docker on a cPanel server is not something
+cPanel supports — it works, but if you later open a ticket about the box, that is the first thing
+support will point at. And cPanel's firewall (CSF, if installed) can interfere with Docker's own
+iptables rules; if containers cannot reach each other, that is where to look first.
+
 ## Creating the first account
 
 The demo accounts are seed data for local development and must not exist on a server. Register
