@@ -1,0 +1,47 @@
+# Reverse proxy for the production stack.
+#
+# Caddy rather than nginx for one reason that matters here: it obtains and renews the TLS
+# certificate for the domain by itself. There is no certbot cron to forget and no renewal that
+# silently lapses eleven months from now.
+#
+# One domain, two upstreams. `/api/*` is stripped and forwarded to the API; everything else goes
+# to Next.js. Serving both from one origin means the session cookie is first-party and no CORS
+# configuration is involved — the class of "works locally, blocked in production" problem this
+# avoids is worth more than the tidiness of separate subdomains.
+
+{$DOMAIN} {
+	encode gzip
+
+	# The file-serving surface. Kept as its own matcher so its caching and headers can diverge
+	# from the JSON API later without touching the rest.
+	handle /files/* {
+		reverse_proxy api:4000
+	}
+
+	handle_path /api/* {
+		reverse_proxy api:4000
+	}
+
+	# WebSocket upgrades for realtime collaboration. Caddy forwards these transparently; the
+	# matcher exists so the route is explicit rather than incidental.
+	@websocket {
+		header Connection *Upgrade*
+		header Upgrade websocket
+	}
+	handle @websocket {
+		reverse_proxy api:4000
+	}
+
+	handle {
+		reverse_proxy web:3000
+	}
+
+	header {
+		# Sent on every response rather than per-route, so a new route cannot be added without it.
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+}

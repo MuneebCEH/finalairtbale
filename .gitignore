@@ -36,3 +36,8 @@ Thumbs.db
 
 # Production build output, kept separate so it does not collide with the dev server.
 .next-build/
+
+# Production secrets for the compose stack. Generated on the server, never committed: this file
+# holds the database password and the signing key that every attachment link depends on.
+.env.prod
+infra/compose/.env.prod

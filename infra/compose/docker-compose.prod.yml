@@ -1,0 +1,146 @@
+name: tessera-prod
+
+# ---------------------------------------------------------------------------
+# Production stack for a single host.
+#
+# This is what runs on a VPS: Postgres, Redis, the three application services, and a reverse
+# proxy that terminates TLS for the domain. It is deliberately one file and one command, because
+# a deployment that takes eleven manual steps is a deployment that drifts.
+#
+# It is NOT for shared hosting. The app needs Postgres — the record store is JSONB with partial
+# indexes and row-level security, and the filter compiler emits Postgres SQL — so a MySQL-only
+# cPanel plan cannot run this whatever else is configured.
+#
+# Every secret comes from the environment. Nothing is defaulted to a working value on purpose:
+# a stack that boots with a blank password is a stack somebody ships with a blank password.
+# ---------------------------------------------------------------------------
+
+services:
+  postgres:
+    image: postgres:16.4-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: tessera
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.prod}
+      POSTGRES_DB: tessera
+      POSTGRES_INITDB_ARGS: '--encoding=UTF8 --locale=C'
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    # No published port. The database is reachable only from this compose network; exposing 5432
+    # to the internet is how a VPS Postgres ends up in somebody's scan results.
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U tessera -d tessera']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    # Queue state must survive a restart; `appendonly` is the difference between a redeploy that
+    # resumes and one that silently loses whatever was queued.
+    command: ['redis-server', '--appendonly', 'yes']
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.api
+    # Runs to completion and exits. The app services wait for this, so a deploy can never serve
+    # traffic against a schema the build does not expect.
+    command: ['npx', 'prisma', 'migrate', 'deploy', '--schema', 'packages/database/prisma/schema.prisma']
+    environment:
+      DATABASE_URL: postgresql://tessera:${POSTGRES_PASSWORD}@postgres:5432/tessera
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: 'no'
+
+  api:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.api
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      DATABASE_URL: postgresql://tessera:${POSTGRES_PASSWORD}@postgres:5432/tessera
+      REDIS_URL: redis://redis:6379
+      SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET in .env.prod}
+      SIGNING_SECRET: ${SIGNING_SECRET:?set SIGNING_SECRET in .env.prod}
+      # Where the browser reaches the API and where signed file links point. Wrong values here
+      # produce attachment links that resolve on the server and 404 in the browser.
+      PUBLIC_API_URL: https://${DOMAIN:?set DOMAIN in .env.prod}/api
+      PUBLIC_WEB_URL: https://${DOMAIN}
+    volumes:
+      - attachments:/app/apps/api/.local/attachments
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.worker
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://tessera:${POSTGRES_PASSWORD}@postgres:5432/tessera
+      REDIS_URL: redis://redis:6379
+      SESSION_SECRET: ${SESSION_SECRET}
+      SIGNING_SECRET: ${SIGNING_SECRET}
+    volumes:
+      - attachments:/app/apps/api/.local/attachments
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.web
+      args:
+        # Next.js inlines public variables at build time, so this has to be an argument rather
+        # than only an environment variable — setting it at runtime alone leaves the built
+        # bundle pointing at localhost.
+        NEXT_PUBLIC_API_URL: https://${DOMAIN}/api
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      NEXT_PUBLIC_API_URL: https://${DOMAIN}/api
+    depends_on:
+      - api
+
+  proxy:
+    image: caddy:2.8-alpine
+    restart: unless-stopped
+    ports:
+      - '80:80'
+      - '443:443'
+    environment:
+      DOMAIN: ${DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - web
+      - api
+
+volumes:
+  postgres-data:
+  redis-data:
+  attachments:
+  caddy-data:
+  caddy-config:
