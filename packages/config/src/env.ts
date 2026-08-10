@@ -215,7 +215,26 @@ let cached: Env | null = null;
  * overwritten by the file.
  */
 function loadDotenv(): void {
-  if (process.env['NODE_ENV'] === 'production') return;
+  /*
+   * In production, only the application's own directory is consulted — never an ancestor.
+   *
+   * The original rule was to skip the file entirely in production, on the grounds that a stray
+   * `.env` baked into an image is how a development credential reaches a live environment. That
+   * reasoning holds for the *ancestor* walk, which is what picks up a file nobody meant to ship.
+   *
+   * It does not hold for a file placed deliberately in the application root, and on shared
+   * hosting that file is the only secret store there is: the alternative is entering twenty-odd
+   * variables by hand into a control panel, again after every redeploy, which is its own kind of
+   * accident.
+   *
+   * Values already in `process.env` still win, so a panel-supplied variable is never overwritten
+   * by the file.
+   */
+  if (process.env['NODE_ENV'] === 'production') {
+    const local = join(process.cwd(), '.env');
+    if (existsSync(local)) loadDotenvFile({ path: local, override: false });
+    return;
+  }
 
   let directory = process.cwd();
   const { root } = parse(directory);

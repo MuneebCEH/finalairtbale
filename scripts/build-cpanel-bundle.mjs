@@ -162,6 +162,24 @@ const webPackage = JSON.parse(readFileSync(join(web, 'package.json'), 'utf8'));
 webPackage.main = 'app.js';
 writeFileSync(join(web, 'package.json'), JSON.stringify(webPackage, null, 2));
 
+/*
+ * Zipped with `tar`, deliberately, and never with PowerShell's `Compress-Archive`.
+ *
+ * `Compress-Archive` writes Windows path separators into the archive. The ZIP specification
+ * requires forward slashes, so Linux treats `node_modules\@nestjs\common\index.js` as a single
+ * filename rather than a path: the extraction reports success and produces several thousand
+ * files with backslashes in their names, no directories, and an application that cannot resolve
+ * a single dependency. `tar` ships with Windows 10 and writes conforming archives.
+ */
+for (const name of ['api', 'web']) {
+  const archive = join(out, `tessera-${name}.zip`);
+  execFileSync('tar', ['-a', '-c', '-f', archive, '.'], {
+    cwd: join(out, name),
+    stdio: 'inherit',
+    shell: process.platform === 'win32',
+  });
+}
+
 console.log('Built dist-cpanel/');
 console.log('  api/  → upload as the application root of the API app');
 console.log('  web/  → upload as the application root of the web app');

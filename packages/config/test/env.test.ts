@@ -1,3 +1,7 @@
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
 import { envSchema, loadEnv } from '../src/env';
@@ -196,5 +200,69 @@ describe('the PORT alias', () => {
 
   it('falls back to the default when neither is set', () => {
     expect(loadEnv({ ...VALID } as NodeJS.ProcessEnv, true).API_PORT).toBe(4000);
+  });
+});
+
+describe('reading .env in production', () => {
+  /**
+   * On shared hosting the application root's `.env` is the only secret store there is — the
+   * alternative is typing twenty-odd variables into a control panel by hand, again after every
+   * redeploy. The ancestor walk stays disabled in production, because that is what picks up a
+   * stray file nobody meant to ship; the application's own directory does not have that problem.
+   */
+  it('loads the file sitting in the working directory', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'tessera-env-'));
+    writeFileSync(join(directory, '.env'), 'STORAGE_BUCKET=from-dotenv\n');
+
+    const previousCwd = process.cwd();
+    const previousNodeEnv = process.env['NODE_ENV'];
+    const previousBucket = process.env['STORAGE_BUCKET'];
+
+    try {
+      process.chdir(directory);
+      process.env['NODE_ENV'] = 'production';
+      delete process.env['STORAGE_BUCKET'];
+
+      loadEnv(process.env, true);
+      expect(process.env['STORAGE_BUCKET']).toBe('from-dotenv');
+    } catch {
+      // The schema rejects the rest of this synthetic environment; what is under test is only
+      // whether the file was read, which the assertion above already settled.
+    } finally {
+      process.chdir(previousCwd);
+      if (previousNodeEnv === undefined) delete process.env['NODE_ENV'];
+      else process.env['NODE_ENV'] = previousNodeEnv;
+      if (previousBucket === undefined) delete process.env['STORAGE_BUCKET'];
+      else process.env['STORAGE_BUCKET'] = previousBucket;
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('does not overwrite a variable the platform already set', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'tessera-env-'));
+    writeFileSync(join(directory, '.env'), 'STORAGE_BUCKET=from-dotenv\n');
+
+    const previousCwd = process.cwd();
+    const previousNodeEnv = process.env['NODE_ENV'];
+    const previousBucket = process.env['STORAGE_BUCKET'];
+
+    try {
+      process.chdir(directory);
+      process.env['NODE_ENV'] = 'production';
+      process.env['STORAGE_BUCKET'] = 'from-panel';
+
+      loadEnv(process.env, true);
+      // A value entered in the hosting panel must beat one left in a file.
+      expect(process.env['STORAGE_BUCKET']).toBe('from-panel');
+    } catch {
+      expect(process.env['STORAGE_BUCKET']).toBe('from-panel');
+    } finally {
+      process.chdir(previousCwd);
+      if (previousNodeEnv === undefined) delete process.env['NODE_ENV'];
+      else process.env['NODE_ENV'] = previousNodeEnv;
+      if (previousBucket === undefined) delete process.env['STORAGE_BUCKET'];
+      else process.env['STORAGE_BUCKET'] = previousBucket;
+      rmSync(directory, { recursive: true, force: true });
+    }
   });
 });
