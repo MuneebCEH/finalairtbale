@@ -7,24 +7,24 @@ The names are the ones `packages/config/src/env.ts` actually reads. Guessing the
 earlier version of this document demanded a variable the app does not use while staying silent
 about eight it does.
 
-## The web app — `airtable.cloudxhosting.us`
+## The web app — `airtable.sharptechitsolution.com`
 
 | Variable | Value |
 | --- | --- |
 | `NODE_ENV` | `production` |
-| `NEXT_PUBLIC_API_URL` | `https://api.airtable.cloudxhosting.us` |
+| `NEXT_PUBLIC_API_URL` | `https://api.airtable.sharptechitsolution.com` |
 
 `NEXT_PUBLIC_*` values are inlined when Next.js builds, not when it starts, so this one has to be
 set **before** `scripts/build-cpanel-bundle.mjs` runs. Setting it only in cPanel leaves the
 uploaded bundle still pointing at localhost.
 
-## The API — `api.airtable.cloudxhosting.us`
+## The API — `api.airtable.sharptechitsolution.com`
 
 | Variable | Value |
 | --- | --- |
 | `NODE_ENV` | `production` |
-| `APP_URL` | `https://airtable.cloudxhosting.us` |
-| `API_URL` | `https://api.airtable.cloudxhosting.us` |
+| `APP_URL` | `https://airtable.sharptechitsolution.com` |
+| `API_URL` | `https://api.airtable.sharptechitsolution.com` |
 | `DATABASE_URL` | the Neon connection string, including `?sslmode=require` |
 | `REDIS_URL` | `redis://127.0.0.1:6379` |
 | `REDIS_QUEUE_URL` | `redis://127.0.0.1:6379` |
@@ -32,14 +32,14 @@ uploaded bundle still pointing at localhost.
 | `STORAGE_BUCKET` | `tessera-files` |
 | `STORAGE_REGION` | `auto` |
 | `STORAGE_ENDPOINT` | `https://<account-id>.r2.cloudflarestorage.com` |
-| `STORAGE_PUBLIC_URL` | `https://api.airtable.cloudxhosting.us/files` |
+| `STORAGE_PUBLIC_URL` | `https://api.airtable.sharptechitsolution.com/files` |
 | `STORAGE_ACCESS_KEY_ID` | from the R2 API token |
 | `STORAGE_SECRET_ACCESS_KEY` | from the R2 API token |
 | `MAIL_DRIVER` | `smtp` |
-| `MAIL_FROM` | `Tessera <noreply@cloudxhosting.us>` |
-| `SMTP_HOST` | `mail.cloudxhosting.us` |
+| `MAIL_FROM` | `Tessera <noreply@sharptechitsolution.com>` |
+| `SMTP_HOST` | `mail.sharptechitsolution.com` |
 | `SMTP_PORT` | `465` |
-| `SMTP_USER` | `noreply@cloudxhosting.us` |
+| `SMTP_USER` | `noreply@sharptechitsolution.com` |
 | `SMTP_PASSWORD` | that mailbox's password |
 | `SESSION_SECRET` | 64 hex characters, generated |
 | `JWT_SECRET` | 64 hex characters, generated, **different from the above** |
@@ -63,7 +63,7 @@ start, so pointing it at a loopback address that nothing answers is the intended
 | Node.js version | 20 or newer | 20 or newer |
 | Application mode | Production | Production |
 | Application root | where `dist-cpanel/web` was uploaded | where `dist-cpanel/api` was uploaded |
-| Application URL | `airtable.cloudxhosting.us` | `api.airtable.cloudxhosting.us` |
+| Application URL | `airtable.sharptechitsolution.com` | `api.airtable.sharptechitsolution.com` |
 | Application startup file | `app.js` | `app.js` |
 
 Do not run **NPM Install** from the cPanel panel. The dependencies are already in the uploaded

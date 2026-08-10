@@ -14,6 +14,7 @@
  * Run `npm run build` first. This only collects; it does not compile.
  */
 
+import { execFileSync } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -40,16 +41,53 @@ mkdirSync(api, { recursive: true });
 
 cpSync(join(root, 'apps/api/dist'), join(api, 'dist'), { recursive: true });
 
-// The whole workspace node_modules. Wasteful compared to a pruned tree, and chosen anyway:
-// pruning a workspace install by hand is how you discover a missing transitive dependency in
-// production rather than here.
-cpSync(join(root, 'node_modules'), join(api, 'node_modules'), {
+/*
+ * Production dependencies only, installed fresh into the bundle.
+ *
+ * Copying the workspace `node_modules` wholesale was simpler and produced a gigabyte — every
+ * dev dependency in the monorepo, for every package, none of which the server runs. That does
+ * not upload to shared hosting.
+ *
+ * `npm install --omit=dev` against a manifest listing just the API's own dependencies gives the
+ * tree the server actually needs. The workspace packages are copied in afterwards as real
+ * folders, because they are built locally and have no registry to install from.
+ */
+const apiManifest = JSON.parse(readFileSync(join(root, 'apps/api/package.json'), 'utf8'));
+const external = Object.fromEntries(
+  Object.entries(apiManifest.dependencies ?? {}).filter(([name]) => !name.startsWith('@tessera/')),
+);
+
+writeFileSync(
+  join(api, 'package.json'),
+  JSON.stringify(
+    { name: 'tessera-api', version: '1.0.0', private: true, main: 'app.js', dependencies: external },
+    null,
+    2,
+  ),
+);
+
+console.log('Installing production dependencies...');
+execFileSync('npm', ['install', '--omit=dev', '--no-audit', '--no-fund', '--loglevel=error'], {
+  cwd: api,
+  stdio: 'inherit',
+  shell: process.platform === 'win32',
+});
+
+// The workspace packages, as real directories. Only their build output and manifest travel —
+// their sources and tests are not what the server loads.
+for (const name of Object.keys(apiManifest.dependencies ?? {}).filter((n) => n.startsWith('@tessera/'))) {
+  const short = name.replace('@tessera/', '');
+  const from = join(root, 'packages', short);
+  const to = join(api, 'node_modules', name);
+  mkdirSync(to, { recursive: true });
+  cpSync(join(from, 'dist'), join(to, 'dist'), { recursive: true, dereference: true });
+  cpSync(join(from, 'package.json'), join(to, 'package.json'));
+}
+
+// The generated Prisma client, and the schema the client resolves against at runtime.
+cpSync(join(root, 'node_modules/@prisma/client'), join(api, 'node_modules/@prisma/client'), {
   recursive: true,
-  // Workspace packages are symlinks back into the repository. Following them copies the real
-  // files, which is both what the server needs and the only option on Windows, where creating a
-  // symlink requires elevation the build has no business asking for.
   dereference: true,
-  filter: (src) => !src.includes('.cache') && !src.endsWith('.map'),
 });
 
 // The generated Prisma client lives outside node_modules/@prisma and is easy to leave behind.
@@ -93,11 +131,6 @@ for (const name of required) {
 
 require('./dist/main.js');
 `,
-);
-
-writeFileSync(
-  join(api, 'package.json'),
-  JSON.stringify({ name: 'tessera-api', version: '1.0.0', private: true, main: 'app.js' }, null, 2),
 );
 
 // ── Web ─────────────────────────────────────────────────────────────────────
