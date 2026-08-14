@@ -3,8 +3,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Page } from '@tessera/types';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
-import { useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { Suspense, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Alert, Card, EmptyState, ErrorState, LoadingState } from '@/components/ui/feedback';
@@ -38,7 +38,16 @@ interface Workspace {
  * cross-tenant bugs.
  */
 export default function OrganizationHomePage() {
-  const params = useParams<{ orgSlug: string }>();
+  return (
+    <Suspense fallback={null}>
+      <OrganizationHomePageInner />
+    </Suspense>
+  );
+}
+
+function OrganizationHomePageInner() {
+  const searchParams = useSearchParams();
+  const orgSlug = searchParams.get('org') ?? '';
   const queryClient = useQueryClient();
   const [creating, setCreating] = useState(false);
 
@@ -47,7 +56,7 @@ export default function OrganizationHomePage() {
     queryFn: () => apiGet<OrganizationSummary[]>('/v1/me/organizations'),
   });
 
-  const organization = organizations.data?.find((item) => item.slug === params.orgSlug);
+  const organization = organizations.data?.find((item) => item.slug === orgSlug);
 
   const workspaces = useQuery({
     queryKey: ['workspaces', organization?.id],
@@ -143,7 +152,7 @@ export default function OrganizationHomePage() {
         )}
 
         {workspaces.isSuccess && (
-          <WorkspaceGrid page={workspaces.data} orgSlug={params.orgSlug} />
+          <WorkspaceGrid page={workspaces.data} orgSlug={orgSlug} />
         )}
       </div>
     </main>
@@ -164,7 +173,7 @@ function WorkspaceGrid({ page, orgSlug }: { page: Page<Workspace>; orgSlug: stri
     <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
       {page.data.map((workspace) => (
         <Card as="li" key={workspace.id} className="transition-shadow hover:shadow-mid">
-          <Link href={`/app/${orgSlug}/w/${workspace.id}`} className="flex items-start gap-3 p-4">
+          <Link href={`/app/w?org=${orgSlug}&ws=${workspace.id}`} className="flex items-start gap-3 p-4">
             <span
               aria-hidden="true"
               className="flex h-8 w-8 shrink-0 items-center justify-center rounded text-sm"

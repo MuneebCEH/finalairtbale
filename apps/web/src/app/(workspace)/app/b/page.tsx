@@ -2,8 +2,8 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { Suspense, useEffect, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Alert, ErrorState, LoadingState } from '@/components/ui/feedback';
@@ -40,20 +40,30 @@ const FIELD_TYPES = [
  * and both are load-bearing.
  */
 export default function BasePage() {
-  const params = useParams<{ orgSlug: string; baseId: string }>();
+  return (
+    <Suspense fallback={null}>
+      <BasePageInner />
+    </Suspense>
+  );
+}
+
+function BasePageInner() {
+  const searchParams = useSearchParams();
+  const orgSlug = searchParams.get('org') ?? '';
+  const baseId = searchParams.get('base') ?? '';
   const queryClient = useQueryClient();
   const [activeTableId, setActiveTableId] = useState<string | null>(null);
   const [addingField, setAddingField] = useState(false);
   const [section, setSection] = useState<BaseSection>('data');
 
   const base = useQuery({
-    queryKey: ['base', params.baseId],
-    queryFn: () => dataApi.getBase(params.baseId),
+    queryKey: ['base', baseId],
+    queryFn: () => dataApi.getBase(baseId),
   });
 
   const tables = useQuery({
-    queryKey: ['tables', params.baseId],
-    queryFn: () => dataApi.listTables(params.baseId),
+    queryKey: ['tables', baseId],
+    queryFn: () => dataApi.listTables(baseId),
   });
 
   // Selects the first table once they load, so the page is never a blank frame.
@@ -62,9 +72,9 @@ export default function BasePage() {
   }, [tables.data, activeTableId]);
 
   const createTable = useMutation({
-    mutationFn: () => dataApi.createTable(params.baseId, `Table ${(tables.data?.length ?? 0) + 1}`),
+    mutationFn: () => dataApi.createTable(baseId, `Table ${(tables.data?.length ?? 0) + 1}`),
     onSuccess: async (created) => {
-      await queryClient.invalidateQueries({ queryKey: ['tables', params.baseId] });
+      await queryClient.invalidateQueries({ queryKey: ['tables', baseId] });
       setActiveTableId(created.id);
     },
   });
@@ -105,14 +115,14 @@ export default function BasePage() {
     <main id="main" className="flex h-[calc(100vh-3rem)] flex-col">
       <div className="border-b border-line px-6 py-3">
         <nav aria-label="Breadcrumb" className="text-sm text-secondary">
-          <Link href={`/app/${params.orgSlug}`} className="hover:text-primary">
+          <Link href={`/app/o?org=${orgSlug}`} className="hover:text-primary">
             Workspaces
           </Link>
           <span aria-hidden="true" className="mx-1.5 text-tertiary">
             /
           </span>
           <Link
-            href={`/app/${params.orgSlug}/w/${base.data?.workspaceId}`}
+            href={`/app/w?org=${orgSlug}&ws=${base.data?.workspaceId}`}
             className="hover:text-primary"
           >
             Bases
@@ -125,7 +135,7 @@ export default function BasePage() {
 
       {section !== 'data' ? (
         <div className="min-h-0 flex-1 overflow-auto">
-          {section === 'automations' && <AutomationsSection baseId={params.baseId} />}
+          {section === 'automations' && <AutomationsSection baseId={baseId} />}
           {section === 'forms' && (
             <FormsSection tables={(tables.data ?? []).map((t) => ({ id: t.id, name: t.name }))} />
           )}

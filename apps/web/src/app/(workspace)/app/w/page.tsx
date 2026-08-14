@@ -2,8 +2,8 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Suspense, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Alert, Card, EmptyState, ErrorState, LoadingState } from '@/components/ui/feedback';
@@ -13,7 +13,17 @@ import { ApiError } from '@/lib/api-client';
 
 /** The bases inside one workspace. */
 export default function WorkspaceBasesPage() {
-  const params = useParams<{ orgSlug: string; workspaceId: string }>();
+  return (
+    <Suspense fallback={null}>
+      <WorkspaceBasesPageInner />
+    </Suspense>
+  );
+}
+
+function WorkspaceBasesPageInner() {
+  const searchParams = useSearchParams();
+  const orgSlug = searchParams.get('org') ?? '';
+  const workspaceId = searchParams.get('ws') ?? '';
   const router = useRouter();
   const queryClient = useQueryClient();
   const [creating, setCreating] = useState(false);
@@ -21,8 +31,8 @@ export default function WorkspaceBasesPage() {
   const [name, setName] = useState('');
 
   const bases = useQuery({
-    queryKey: ['bases', params.workspaceId],
-    queryFn: () => dataApi.listBases(params.workspaceId),
+    queryKey: ['bases', workspaceId],
+    queryFn: () => dataApi.listBases(workspaceId),
   });
 
   const templates = useQuery({
@@ -32,14 +42,14 @@ export default function WorkspaceBasesPage() {
   });
 
   const useTemplate = useMutation({
-    mutationFn: (templateId: string) => dataApi.createFromTemplate(params.workspaceId, templateId),
-    onSuccess: (base) => router.push(`/app/${params.orgSlug}/b/${base.id}`),
+    mutationFn: (templateId: string) => dataApi.createFromTemplate(workspaceId, templateId),
+    onSuccess: (base) => router.push(`/app/b?org=${orgSlug}&base=${base.id}`),
   });
 
   const create = useMutation({
-    mutationFn: (baseName: string) => dataApi.createBase(params.workspaceId, baseName),
+    mutationFn: (baseName: string) => dataApi.createBase(workspaceId, baseName),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['bases', params.workspaceId] });
+      await queryClient.invalidateQueries({ queryKey: ['bases', workspaceId] });
       setCreating(false);
       setName('');
     },
@@ -48,7 +58,7 @@ export default function WorkspaceBasesPage() {
   return (
     <main id="main" className="mx-auto max-w-5xl px-6 py-10">
       <nav aria-label="Breadcrumb" className="mb-4 text-sm text-secondary">
-        <Link href={`/app/${params.orgSlug}`} className="hover:text-primary">
+        <Link href={`/app/o?org=${orgSlug}`} className="hover:text-primary">
           Workspaces
         </Link>
       </nav>
@@ -186,7 +196,7 @@ export default function WorkspaceBasesPage() {
           <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {bases.data.data.map((base) => (
               <Card as="li" key={base.id} className="transition-shadow hover:shadow-mid">
-                <Link href={`/app/${params.orgSlug}/b/${base.id}`} className="flex items-start gap-3 p-4">
+                <Link href={`/app/b?org=${orgSlug}&base=${base.id}`} className="flex items-start gap-3 p-4">
                   <span
                     aria-hidden="true"
                     className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-accent-subtle text-sm text-accent-text"

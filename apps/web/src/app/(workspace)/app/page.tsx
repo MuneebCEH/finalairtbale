@@ -102,7 +102,7 @@ export default function OrganizationsPage() {
             {query.data.map((organization) => (
               <Card as="li" key={organization.id} className="transition-shadow hover:shadow-mid">
                 <Link
-                  href={`/app/${organization.slug}`}
+                  href={`/app/o?org=${organization.slug}`}
                   className="flex items-center gap-3 p-4"
                 >
                   <span
