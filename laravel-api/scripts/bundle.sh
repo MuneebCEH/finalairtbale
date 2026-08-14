@@ -20,7 +20,10 @@ tar -C "$ROOT" \
   --exclude='./dist-cpanel' --exclude='./vendor' --exclude='./node_modules' \
   --exclude='./.git' --exclude='./.env' --exclude='./storage/logs/*' \
   --exclude='./tests' --exclude='./.phpunit.cache' \
-  -cf - . | tar -C "$BUILD" -xf -
+  --exclude='./storage/app/airtable-import' --exclude='./storage/app/public/attachments' \
+  --exclude='./public/storage' \
+  --warning=no-file-changed \
+  -cf - . | tar -C "$BUILD" -xf - || true
 
 echo "==> Installing production dependencies"
 ( cd "$BUILD" && composer install --no-dev --optimize-autoloader --no-interaction --quiet )
