@@ -8,6 +8,7 @@ use App\Models\Record;
 use App\Models\Table;
 use App\Support\FieldTypes;
 use App\Support\Permissions;
+use App\Support\RecordQueryEngine;
 use App\Support\TenantContext;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -49,6 +50,40 @@ class RecordController extends Controller
         $record = $this->find($tableId, $recordId);
 
         return response()->json(['data' => $this->dto($record)]);
+    }
+
+    /** POST /v1/tables/{tableId}/records/query — filter / sort / group / search over the data JSON. */
+    public function query(Request $request, string $tableId)
+    {
+        $this->tenant($request, 'record:read');
+        $this->strict($request, ['filter', 'sort', 'group', 'fieldIds', 'search', 'limit', 'cursor']);
+        $input = $request->validate([
+            'filter' => ['sometimes', 'array'],
+            'sort' => ['sometimes', 'array', 'max:5'],
+            'group' => ['sometimes', 'array', 'max:3'],
+            'fieldIds' => ['sometimes', 'array', 'max:500'],
+            'search' => ['sometimes', 'string', 'max:500'],
+            'limit' => ['sometimes', 'integer', 'min:1', 'max:1000'],
+            'cursor' => ['sometimes', 'string', 'max:2048'],
+        ]);
+
+        $limit = (int) ($input['limit'] ?? 100);
+        $offset = $this->decodeCursor($input['cursor'] ?? null);
+        $fieldTypes = $this->allFields($tableId);
+
+        $query = Record::where('table_id', $tableId)->whereNull('deleted_at');
+        (new RecordQueryEngine($fieldTypes))->apply($query, $input);
+
+        $rows = $query->offset($offset)->limit($limit + 1)->get();
+        $hasMore = $rows->count() > $limit;
+        $rows = $rows->take($limit);
+
+        $project = ! empty($input['fieldIds']) ? array_flip($input['fieldIds']) : null;
+
+        return response()->json([
+            'data' => $rows->map(fn (Record $r) => $this->dto($r, $project))->values()->all(),
+            'nextCursor' => $hasMore ? $this->encodeCursor($offset + $limit) : null,
+        ]);
     }
 
     public function create(Request $request, string $tableId)
@@ -157,12 +192,33 @@ class RecordController extends Controller
             ?? throw ApiException::notFound('Record not found.');
     }
 
-    /** id => type, for non-computed fields only. */
+    /** id => type, for non-computed fields only (writable through the records API). */
     private function writableFields(string $tableId): array
     {
         return Field::where('table_id', $tableId)->whereNull('deleted_at')
             ->whereNotIn('type', FieldTypes::COMPUTED)
             ->pluck('type', 'id')->all();
+    }
+
+    /** id => type, for every field (any field is a valid filter/sort target). */
+    private function allFields(string $tableId): array
+    {
+        return Field::where('table_id', $tableId)->whereNull('deleted_at')->pluck('type', 'id')->all();
+    }
+
+    private function decodeCursor(?string $cursor): int
+    {
+        if (! is_string($cursor) || $cursor === '') {
+            return 0;
+        }
+        $decoded = base64_decode($cursor, true);
+
+        return $decoded !== false && ctype_digit($decoded) ? (int) $decoded : 0;
+    }
+
+    private function encodeCursor(int $offset): string
+    {
+        return base64_encode((string) $offset);
     }
 
     /** Rejects unknown or computed field ids; values themselves are stored as given. */
@@ -181,11 +237,16 @@ class RecordController extends Controller
         return $fields;
     }
 
-    private function dto(Record $r): array
+    private function dto(Record $r, ?array $project = null): array
     {
+        $fields = (array) ($r->data ?? []);
+        if ($project !== null) {
+            $fields = array_intersect_key($fields, $project);
+        }
+
         return [
             'id' => $r->id,
-            'fields' => $r->data ?? (object) [],
+            'fields' => empty($fields) ? (object) [] : $fields,
             'version' => (int) $r->version,
             'autoNumber' => (int) $r->auto_number,
             'createdBy' => $r->created_by,

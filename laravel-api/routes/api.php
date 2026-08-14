@@ -81,6 +81,7 @@ Route::prefix('v1')->group(function () {
             Route::delete('tables/{tableId}/fields/{fieldId}', [FieldController::class, 'delete']);
 
             Route::get('tables/{tableId}/records', [RecordController::class, 'list']);
+            Route::post('tables/{tableId}/records/query', [RecordController::class, 'query']);
             Route::post('tables/{tableId}/records', [RecordController::class, 'create']);
             Route::get('tables/{tableId}/records/{recordId}', [RecordController::class, 'show']);
             Route::patch('tables/{tableId}/records/{recordId}', [RecordController::class, 'update']);
