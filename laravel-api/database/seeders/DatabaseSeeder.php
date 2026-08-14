@@ -2,8 +2,12 @@
 
 namespace Database\Seeders;
 
+use App\Models\Base;
+use App\Models\Field;
 use App\Models\Organization;
 use App\Models\OrganizationMember;
+use App\Models\Record;
+use App\Models\Table;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Models\WorkspaceMember;
@@ -56,6 +60,9 @@ class DatabaseSeeder extends Seeder
         $ops = $this->workspace($northwind, 'Operations', $users['owner@demo.tessera.local'], 0);
         $sales = $this->workspace($northwind, 'Sales', $users['owner@demo.tessera.local'], 1);
 
+        // A populated base so the grid has something to show on first login.
+        $this->demoBase($northwind, $ops, $users['owner@demo.tessera.local'], $now);
+
         // The editor and viewer only belong to Operations — Sales must stay invisible to them.
         $this->workspaceMember($ops, $users['editor@demo.tessera.local'], 'editor');
         $this->workspaceMember($ops, $users['viewer@demo.tessera.local'], 'viewer');
@@ -70,6 +77,74 @@ class DatabaseSeeder extends Seeder
         $this->workspace($meridian, 'Field Teams', $users['owner@rival.tessera.local'], 0);
 
         // guest@external.local intentionally belongs to no organization.
+    }
+
+    /** A "Sales CRM" base with a Contacts table, typed fields, and a few rows. Idempotent. */
+    private function demoBase(Organization $org, Workspace $ws, User $owner, Carbon $now): void
+    {
+        if (Base::where('workspace_id', $ws->id)->where('name', 'Sales CRM')->exists()) {
+            return;
+        }
+
+        $base = Base::create([
+            'organization_id' => $org->id,
+            'workspace_id' => $ws->id,
+            'name' => 'Sales CRM',
+            'icon' => '💼',
+            'created_by_id' => $owner->id,
+        ]);
+
+        $table = Table::create([
+            'organization_id' => $org->id,
+            'base_id' => $base->id,
+            'name' => 'Contacts',
+            'created_by_id' => $owner->id,
+        ]);
+
+        $mk = fn (string $name, string $type, bool $primary = false, int $pos = 0) => Field::create([
+            'organization_id' => $org->id,
+            'table_id' => $table->id,
+            'name' => $name,
+            'type' => $type,
+            'is_primary' => $primary,
+            'position' => $pos,
+            'created_by_id' => $owner->id,
+        ]);
+
+        $fName = $mk('Name', 'singleLineText', true, 0);
+        $fEmail = $mk('Email', 'email', false, 1);
+        $fStage = $mk('Stage', 'singleSelect', false, 2);
+        $fDeal = $mk('Deal Size', 'currency', false, 3);
+        $fNext = $mk('Next Step', 'singleLineText', false, 4);
+
+        $table->forceFill(['primary_field_id' => $fName->id])->save();
+
+        $rows = [
+            ['Acme Corp', 'buyer@acme.com', 'Negotiation', 48000, 'Send contract'],
+            ['Globex', 'cto@globex.com', 'Qualified', 12500, 'Schedule demo'],
+            ['Initech', 'ops@initech.com', 'Closed Won', 96000, 'Kickoff call'],
+            ['Umbrella', 'proc@umbrella.com', 'Prospecting', 5000, 'Discovery email'],
+            ['Soylent', 'deals@soylent.com', 'Negotiation', 31000, 'Follow up Friday'],
+        ];
+        $seq = 0;
+        foreach ($rows as $r) {
+            $seq++;
+            Record::create([
+                'organization_id' => $org->id,
+                'table_id' => $table->id,
+                'data' => [
+                    $fName->id => $r[0], $fEmail->id => $r[1], $fStage->id => $r[2],
+                    $fDeal->id => $r[3], $fNext->id => $r[4],
+                ],
+                'version' => 1,
+                'auto_number' => $seq,
+                'created_by' => $owner->id,
+                'updated_by' => $owner->id,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ]);
+        }
+        $table->forceFill(['record_count' => count($rows), 'auto_number_seq' => $seq])->save();
     }
 
     private function member(Organization $org, User $user, string $role, Carbon $now): void

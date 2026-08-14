@@ -40,7 +40,10 @@ class RecordController extends Controller
 
         return response()->json([
             'data' => $rows->map(fn (Record $r) => $this->dto($r))->values()->all(),
-            'nextCursor' => $hasMore ? $rows->last()->id : null,
+            'meta' => [
+                'hasMore' => $hasMore,
+                'nextCursor' => $hasMore ? $rows->last()->id : null,
+            ],
         ]);
     }
 
@@ -82,7 +85,10 @@ class RecordController extends Controller
 
         return response()->json([
             'data' => $rows->map(fn (Record $r) => $this->dto($r, $project))->values()->all(),
-            'nextCursor' => $hasMore ? $this->encodeCursor($offset + $limit) : null,
+            'meta' => [
+                'hasMore' => $hasMore,
+                'nextCursor' => $hasMore ? $this->encodeCursor($offset + $limit) : null,
+            ],
         ]);
     }
 
@@ -246,13 +252,13 @@ class RecordController extends Controller
 
         return [
             'id' => $r->id,
-            'fields' => empty($fields) ? (object) [] : $fields,
             'version' => (int) $r->version,
             'autoNumber' => (int) $r->auto_number,
+            'createdAt' => $r->created_at?->copy()->utc()->format('Y-m-d\TH:i:s.v\Z'),
+            'updatedAt' => $r->updated_at?->copy()->utc()->format('Y-m-d\TH:i:s.v\Z'),
             'createdBy' => $r->created_by,
             'updatedBy' => $r->updated_by,
-            'createdTime' => $r->created_at?->copy()->utc()->format('Y-m-d\TH:i:s.v\Z'),
-            'lastModifiedTime' => $r->updated_at?->copy()->utc()->format('Y-m-d\TH:i:s.v\Z'),
+            'fields' => empty($fields) ? (object) [] : $fields,
         ];
     }
 
