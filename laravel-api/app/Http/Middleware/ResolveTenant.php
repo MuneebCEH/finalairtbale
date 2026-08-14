@@ -68,6 +68,14 @@ class ResolveTenant
             }
         }
 
+        if (! $orgId && ($formId = $request->route('formId'))) {
+            $form = \App\Models\Form::whereKey($formId)->whereNull('deleted_at')->first();
+            $orgId = $form?->organization_id;
+            if ($form) {
+                $request->attributes->set('resolved_form', $form);
+            }
+        }
+
         $member = $orgId
             ? OrganizationMember::where('organization_id', $orgId)
                 ->where('user_id', $user->id)

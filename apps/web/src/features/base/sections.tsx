@@ -1,9 +1,12 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
 
 import { LoadingState } from '@/components/ui/feedback';
-import { apiRequest } from '@/lib/api-client';
+import { apiPost, apiRequest } from '@/lib/api-client';
+
+import { FormBuilder } from './form-builder';
 
 /**
  * The Automations, Interfaces and Forms sections.
@@ -80,7 +83,11 @@ export function AutomationsSection({ baseId }: { baseId: string }) {
   );
 }
 
-export function FormsSection({ tableIds }: { tableIds: string[] }) {
+export function FormsSection({ tables }: { tables: { id: string; name: string }[] }) {
+  const tableIds = tables.map((t) => t.id);
+  const [openForm, setOpenForm] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+
   const query = useQuery({
     queryKey: ['forms', tableIds],
     queryFn: async () => {
@@ -97,45 +104,91 @@ export function FormsSection({ tableIds }: { tableIds: string[] }) {
     enabled: tableIds.length > 0,
   });
 
-  if (query.isPending) return <LoadingState label="Loading forms" />;
+  const create = async (tableId: string) => {
+    setCreating(true);
+    try {
+      const result = await apiPost<{ id: string }>(`/v1/tables/${tableId}/forms`, {});
+      await query.refetch();
+      setOpenForm(result.id);
+    } finally {
+      setCreating(false);
+    }
+  };
 
-  const forms = query.data ?? [];
-
-  if (forms.length === 0) {
+  if (openForm) {
     return (
-      <Empty
-        title="No forms yet"
-        body="A form is a public page that writes into one of this base's tables. It only ever accepts the fields you put on it."
+      <FormBuilder
+        formId={openForm}
+        onClose={() => setOpenForm(null)}
+        onChanged={() => void query.refetch()}
       />
     );
   }
 
-  return (
-    <ul className="divide-y divide-line">
-      {forms.map((form) => (
-        <li key={form.id} className="flex items-center gap-3 px-4 py-3">
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium text-primary">{form.title}</p>
-            <p className="text-xs text-tertiary">
-              {form.submissionCount} {form.submissionCount === 1 ? 'response' : 'responses'}
-            </p>
-          </div>
+  if (query.isPending) return <LoadingState label="Loading forms" />;
 
-          {form.isPublished ? (
-            <a
-              href={`/v1/f/${form.slug}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-xs text-accent-text hover:underline"
-            >
-              Open form
-            </a>
-          ) : (
-            <span className="rounded-full bg-sunken px-2 py-0.5 text-2xs text-tertiary">Draft</span>
-          )}
-        </li>
-      ))}
-    </ul>
+  const forms = query.data ?? [];
+
+  return (
+    <div>
+      <div className="flex items-center justify-between border-b border-line px-4 py-3">
+        <h2 className="text-sm font-medium text-secondary">Forms</h2>
+        {/* One table: a plain button. Several: a small picker so the form knows where to write. */}
+        {tables.length === 1 ? (
+          <button
+            onClick={() => create(tables[0]!.id)}
+            disabled={creating}
+            className="rounded bg-accent px-2.5 py-1 text-xs font-medium text-inverted disabled:opacity-60"
+          >
+            New form
+          </button>
+        ) : (
+          <select
+            value=""
+            disabled={creating}
+            onChange={(e) => e.target.value && create(e.target.value)}
+            className="rounded border border-line bg-surface px-2 py-1 text-xs"
+          >
+            <option value="">+ New form for…</option>
+            {tables.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
+
+      {forms.length === 0 ? (
+        <Empty
+          title="No forms yet"
+          body="A form is a public page that writes into one of this base's tables. It only ever accepts the fields you put on it."
+        />
+      ) : (
+        <ul className="divide-y divide-line">
+          {forms.map((form) => (
+            <li key={form.id}>
+              <button
+                onClick={() => setOpenForm(form.id)}
+                className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-sunken"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-primary">{form.title}</p>
+                  <p className="text-xs text-tertiary">
+                    {form.submissionCount} {form.submissionCount === 1 ? 'response' : 'responses'}
+                  </p>
+                </div>
+                {form.isPublished ? (
+                  <span className="text-2xs text-success-text">● Live</span>
+                ) : (
+                  <span className="rounded-full bg-sunken px-2 py-0.5 text-2xs text-tertiary">Draft</span>
+                )}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 

@@ -126,7 +126,9 @@ export default function BasePage() {
       {section !== 'data' ? (
         <div className="min-h-0 flex-1 overflow-auto">
           {section === 'automations' && <AutomationsSection baseId={params.baseId} />}
-          {section === 'forms' && <FormsSection tableIds={(tables.data ?? []).map((t) => t.id)} />}
+          {section === 'forms' && (
+            <FormsSection tables={(tables.data ?? []).map((t) => ({ id: t.id, name: t.name }))} />
+          )}
           {section === 'interfaces' && <InterfacesSection />}
         </div>
       ) : (

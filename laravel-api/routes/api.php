@@ -5,9 +5,11 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BaseController;
 use App\Http\Controllers\CommentController;
 use App\Http\Controllers\FieldController;
+use App\Http\Controllers\FormController;
 use App\Http\Controllers\HealthController;
 use App\Http\Controllers\MeController;
 use App\Http\Controllers\OrganizationController;
+use App\Http\Controllers\PublicFormController;
 use App\Http\Controllers\RecordController;
 use App\Http\Controllers\SectionsController;
 use App\Http\Controllers\WorkspaceController;
@@ -47,6 +49,10 @@ Route::prefix('v1')->group(function () {
             Route::delete('sessions', [AuthController::class, 'revokeOtherSessions']);
         });
     });
+
+    // Public form — anyone with the link, no account. Serves HTML and accepts submissions.
+    Route::get('f/{slug}', [PublicFormController::class, 'show']);
+    Route::post('f/{slug}', [PublicFormController::class, 'submit']);
 
     // Current user
     Route::middleware('session')->group(function () {
@@ -96,8 +102,14 @@ Route::prefix('v1')->group(function () {
             Route::get('records/{recordId}/comments', [CommentController::class, 'list']);
             Route::post('records/{recordId}/comments', [CommentController::class, 'create']);
             Route::post('bases/{baseId}/attachments', [AttachmentController::class, 'upload']);
-            Route::get('tables/{tableId}/forms', [SectionsController::class, 'forms']);
             Route::get('bases/{baseId}/automations', [SectionsController::class, 'automations']);
+
+            // Forms
+            Route::get('tables/{tableId}/forms', [FormController::class, 'index']);
+            Route::post('tables/{tableId}/forms', [FormController::class, 'store']);
+            Route::get('forms/{formId}', [FormController::class, 'show']);
+            Route::patch('forms/{formId}', [FormController::class, 'update']);
+            Route::delete('forms/{formId}', [FormController::class, 'destroy']);
         });
     });
 });
