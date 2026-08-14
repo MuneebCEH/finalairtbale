@@ -1,9 +1,12 @@
 <?php
 
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\BaseController;
+use App\Http\Controllers\FieldController;
 use App\Http\Controllers\HealthController;
 use App\Http\Controllers\MeController;
 use App\Http\Controllers\OrganizationController;
+use App\Http\Controllers\RecordController;
 use App\Http\Controllers\WorkspaceController;
 use Illuminate\Support\Facades\Route;
 
@@ -59,6 +62,29 @@ Route::prefix('v1')->group(function () {
             Route::get('organizations/{orgId}/workspaces', [WorkspaceController::class, 'list']);
             Route::post('organizations/{orgId}/workspaces', [WorkspaceController::class, 'create']);
             Route::get('workspaces/{workspaceId}', [WorkspaceController::class, 'show']);
+
+            // ── Data plane: bases, tables, fields, records ──────────────────
+            Route::get('workspaces/{workspaceId}/bases', [BaseController::class, 'listBases']);
+            Route::post('workspaces/{workspaceId}/bases', [BaseController::class, 'createBase']);
+            Route::get('bases/{baseId}', [BaseController::class, 'showBase']);
+            Route::patch('bases/{baseId}', [BaseController::class, 'updateBase']);
+            Route::delete('bases/{baseId}', [BaseController::class, 'deleteBase']);
+            Route::get('bases/{baseId}/tables', [BaseController::class, 'listTables']);
+            Route::post('bases/{baseId}/tables', [BaseController::class, 'createTable']);
+            Route::get('tables/{tableId}', [BaseController::class, 'showTable']);
+            Route::patch('tables/{tableId}', [BaseController::class, 'updateTable']);
+            Route::delete('tables/{tableId}', [BaseController::class, 'deleteTable']);
+
+            Route::get('tables/{tableId}/fields', [FieldController::class, 'list']);
+            Route::post('tables/{tableId}/fields', [FieldController::class, 'create']);
+            Route::patch('tables/{tableId}/fields/{fieldId}', [FieldController::class, 'update']);
+            Route::delete('tables/{tableId}/fields/{fieldId}', [FieldController::class, 'delete']);
+
+            Route::get('tables/{tableId}/records', [RecordController::class, 'list']);
+            Route::post('tables/{tableId}/records', [RecordController::class, 'create']);
+            Route::get('tables/{tableId}/records/{recordId}', [RecordController::class, 'show']);
+            Route::patch('tables/{tableId}/records/{recordId}', [RecordController::class, 'update']);
+            Route::delete('tables/{tableId}/records', [RecordController::class, 'bulkDelete']);
         });
     });
 });

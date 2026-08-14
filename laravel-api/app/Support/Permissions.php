@@ -30,6 +30,14 @@ final class Permissions
         'organization:update' => 'admin',
         'organization:manage_settings' => 'admin',
         'member:manage' => 'admin',
+
+        // Data plane. Reads for any member; writes for member+ (guests are read-only). NOTE:
+        // finer workspace-role gating (a workspace 'viewer' being read-only even though they are an
+        // org 'member') is the next Phase 4 refinement.
+        'base:read' => 'guest', 'base:create' => 'member', 'base:update' => 'member', 'base:delete' => 'member',
+        'table:read' => 'guest', 'table:create' => 'member', 'table:update' => 'member', 'table:delete' => 'member',
+        'field:read' => 'guest', 'field:create' => 'member', 'field:update' => 'member', 'field:delete' => 'member',
+        'record:read' => 'guest', 'record:create' => 'member', 'record:update' => 'member', 'record:delete' => 'member',
     ];
 
     public static function can(TenantContext $tenant, string $action): bool

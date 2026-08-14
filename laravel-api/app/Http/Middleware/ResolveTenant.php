@@ -3,7 +3,9 @@
 namespace App\Http\Middleware;
 
 use App\Exceptions\ApiException;
+use App\Models\Base;
 use App\Models\OrganizationMember;
+use App\Models\Table;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Support\TenantContext;
@@ -29,16 +31,31 @@ class ResolveTenant
             throw ApiException::unauthenticated('Authentication is required.');
         }
 
+        // The org is named directly, or derived from the workspace/base/table in the path. Each
+        // resolved entity is stashed so controllers needn't re-fetch it.
         $orgId = $request->route('orgId');
-        if (! $orgId) {
-            $workspaceId = $request->route('workspaceId');
-            if ($workspaceId) {
-                $workspace = Workspace::whereKey($workspaceId)->first();
-                $orgId = $workspace?->organization_id;
-                // Stash the workspace so controllers needn't re-fetch it.
-                if ($workspace) {
-                    $request->attributes->set('resolved_workspace', $workspace);
-                }
+
+        if (! $orgId && ($workspaceId = $request->route('workspaceId'))) {
+            $workspace = Workspace::whereKey($workspaceId)->first();
+            $orgId = $workspace?->organization_id;
+            if ($workspace) {
+                $request->attributes->set('resolved_workspace', $workspace);
+            }
+        }
+
+        if (! $orgId && ($baseId = $request->route('baseId'))) {
+            $base = Base::whereKey($baseId)->whereNull('deleted_at')->first();
+            $orgId = $base?->organization_id;
+            if ($base) {
+                $request->attributes->set('resolved_base', $base);
+            }
+        }
+
+        if (! $orgId && ($tableId = $request->route('tableId'))) {
+            $table = Table::whereKey($tableId)->whereNull('deleted_at')->first();
+            $orgId = $table?->organization_id;
+            if ($table) {
+                $request->attributes->set('resolved_table', $table);
             }
         }
 
