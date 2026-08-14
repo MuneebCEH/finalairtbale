@@ -27,7 +27,7 @@ use Illuminate\Support\Carbon;
  */
 class AirtableImport extends Command
 {
-    protected $signature = 'airtable:import {dir} {--owner=owner@demo.tessera.local} {--workspace=Imported} {--base=Imported base}';
+    protected $signature = 'airtable:import {dir} {--owner=owner@demo.tessera.local} {--workspace=Imported} {--base=Imported base} {--into-base=} {--only=}';
     protected $description = 'Import a pulled Airtable base (manifest + records JSON) into a new base.';
 
     private const TYPE_MAP = [
@@ -83,25 +83,43 @@ class AirtableImport extends Command
             ?? Organization::first();
 
         $now = Carbon::now();
-        $ws = Workspace::firstOrCreate(
-            ['organization_id' => $org->id, 'name' => $this->option('workspace')],
-            ['created_by_id' => $owner->id, 'position' => 99],
-        );
-        WorkspaceMember::firstOrCreate(
-            ['workspace_id' => $ws->id, 'user_id' => $owner->id],
-            ['organization_id' => $org->id, 'role' => 'owner'],
-        );
 
-        $base = Base::create([
-            'organization_id' => $org->id,
-            'workspace_id' => $ws->id,
-            'name' => $this->option('base'),
-            'icon' => '🏥',
-            'created_by_id' => $owner->id,
-        ]);
-        $this->info("Base created: {$base->name} ({$base->id})");
+        // Add into an existing base (preserving its other tables/attachments), or create a new one.
+        if ($this->option('into-base')) {
+            $base = Base::where('name', $this->option('into-base'))->whereNull('deleted_at')->first();
+            if (! $base) {
+                $this->error('Target base not found: '.$this->option('into-base'));
+
+                return self::FAILURE;
+            }
+            $this->info("Adding into existing base: {$base->name} ({$base->id})");
+        } else {
+            $ws = Workspace::firstOrCreate(
+                ['organization_id' => $org->id, 'name' => $this->option('workspace')],
+                ['created_by_id' => $owner->id, 'position' => 99],
+            );
+            WorkspaceMember::firstOrCreate(
+                ['workspace_id' => $ws->id, 'user_id' => $owner->id],
+                ['organization_id' => $org->id, 'role' => 'owner'],
+            );
+            $base = Base::create([
+                'organization_id' => $org->id,
+                'workspace_id' => $ws->id,
+                'name' => $this->option('base'),
+                'icon' => '🏥',
+                'created_by_id' => $owner->id,
+            ]);
+            $this->info("Base created: {$base->name} ({$base->id})");
+        }
+
+        $only = $this->option('only') ? explode(',', $this->option('only')) : null;
 
         foreach ($manifest['tables'] as $t) {
+            if ($only !== null && ! in_array($t['id'], $only, true)) {
+                continue;
+            }
+            // Replace an existing same-named table (safe for the empty ones being back-filled).
+            TableModel::where('base_id', $base->id)->where('name', $t['name'])->forceDelete();
             $this->importTable($dir, $base, $org, $owner, $t, $now);
         }
 

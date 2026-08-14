@@ -93,6 +93,15 @@ export interface Attachment {
   scanStatus: string;
 }
 
+export interface TemplateSummary {
+  id: string;
+  name: string;
+  category: string;
+  icon: string;
+  description: string;
+  tables: string[];
+}
+
 /** A linked-record reference as the grid renders it: the id plus a display label. */
 export interface LinkedRef {
   id: string;
@@ -169,6 +178,11 @@ export const dataApi = {
 
   createBase: (workspaceId: string, name: string) =>
     apiPost<Base>(`/v1/workspaces/${workspaceId}/bases`, { name }),
+
+  listTemplates: () => apiRequest<{ data: TemplateSummary[] }>('/v1/templates'),
+
+  createFromTemplate: (workspaceId: string, templateId: string) =>
+    apiPost<Base>(`/v1/workspaces/${workspaceId}/bases/from-template`, { templateId }),
 
   getBase: (baseId: string) => apiGet<Base>(`/v1/bases/${baseId}`),
 

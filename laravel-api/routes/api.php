@@ -12,6 +12,7 @@ use App\Http\Controllers\OrganizationController;
 use App\Http\Controllers\PublicFormController;
 use App\Http\Controllers\RecordController;
 use App\Http\Controllers\SectionsController;
+use App\Http\Controllers\TemplateController;
 use App\Http\Controllers\WorkspaceController;
 use Illuminate\Support\Facades\Route;
 
@@ -59,6 +60,7 @@ Route::prefix('v1')->group(function () {
         Route::get('me', [MeController::class, 'show']);
         Route::patch('me', [MeController::class, 'update']);
         Route::get('me/organizations', [MeController::class, 'organizations']);
+        Route::get('templates', [TemplateController::class, 'index']);
     });
 
     // Organizations & workspaces. Creating an org needs no tenant (it makes one); everything else
@@ -76,6 +78,7 @@ Route::prefix('v1')->group(function () {
             // ── Data plane: bases, tables, fields, records ──────────────────
             Route::get('workspaces/{workspaceId}/bases', [BaseController::class, 'listBases']);
             Route::post('workspaces/{workspaceId}/bases', [BaseController::class, 'createBase']);
+            Route::post('workspaces/{workspaceId}/bases/from-template', [TemplateController::class, 'create']);
             Route::get('bases/{baseId}', [BaseController::class, 'showBase']);
             Route::patch('bases/{baseId}', [BaseController::class, 'updateBase']);
             Route::delete('bases/{baseId}', [BaseController::class, 'deleteBase']);

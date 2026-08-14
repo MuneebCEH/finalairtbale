@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -14,13 +14,26 @@ import { ApiError } from '@/lib/api-client';
 /** The bases inside one workspace. */
 export default function WorkspaceBasesPage() {
   const params = useParams<{ orgSlug: string; workspaceId: string }>();
+  const router = useRouter();
   const queryClient = useQueryClient();
   const [creating, setCreating] = useState(false);
+  const [showTemplates, setShowTemplates] = useState(false);
   const [name, setName] = useState('');
 
   const bases = useQuery({
     queryKey: ['bases', params.workspaceId],
     queryFn: () => dataApi.listBases(params.workspaceId),
+  });
+
+  const templates = useQuery({
+    queryKey: ['templates'],
+    queryFn: () => dataApi.listTemplates(),
+    enabled: showTemplates,
+  });
+
+  const useTemplate = useMutation({
+    mutationFn: (templateId: string) => dataApi.createFromTemplate(params.workspaceId, templateId),
+    onSuccess: (base) => router.push(`/app/${params.orgSlug}/b/${base.id}`),
   });
 
   const create = useMutation({
@@ -48,11 +61,63 @@ export default function WorkspaceBasesPage() {
           </p>
         </div>
         {!creating && (
-          <Button variant="primary" onClick={() => setCreating(true)}>
-            New base
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="ghost" onClick={() => setShowTemplates((v) => !v)}>
+              {showTemplates ? 'Hide templates' : 'Use a template'}
+            </Button>
+            <Button variant="primary" onClick={() => setCreating(true)}>
+              New base
+            </Button>
+          </div>
         )}
       </header>
+
+      {showTemplates && (
+        <Card className="mt-6 p-5">
+          <h2 className="text-md font-medium text-primary">Start from a template</h2>
+          <p className="mt-1 text-sm text-secondary">
+            A ready-made base with tables, fields and sample data you can edit.
+          </p>
+
+          {useTemplate.error instanceof ApiError && (
+            <Alert tone="danger" className="mt-3">
+              {useTemplate.error.message}
+            </Alert>
+          )}
+
+          {templates.isPending && <LoadingState label="Loading templates" />}
+
+          {templates.isSuccess && (
+            <ul className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {templates.data.data.map((template) => (
+                <li key={template.id}>
+                  <Card className="flex h-full flex-col p-4">
+                    <div className="flex items-center gap-2">
+                      <span aria-hidden="true" className="text-xl">
+                        {template.icon}
+                      </span>
+                      <span className="font-medium text-primary">{template.name}</span>
+                    </div>
+                    <p className="mt-1 text-2xs uppercase tracking-wide text-tertiary">
+                      {template.category}
+                    </p>
+                    <p className="mt-2 flex-1 text-xs text-secondary">{template.description}</p>
+                    <p className="mt-2 text-2xs text-tertiary">Tables: {template.tables.join(', ')}</p>
+                    <Button
+                      variant="primary"
+                      className="mt-3"
+                      loading={useTemplate.isPending && useTemplate.variables === template.id}
+                      onClick={() => useTemplate.mutate(template.id)}
+                    >
+                      Use template
+                    </Button>
+                  </Card>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      )}
 
       {creating && (
         <Card className="mt-6 p-5">
