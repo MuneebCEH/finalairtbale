@@ -93,6 +93,12 @@ export interface Attachment {
   scanStatus: string;
 }
 
+/** A linked-record reference as the grid renders it: the id plus a display label. */
+export interface LinkedRef {
+  id: string;
+  label: string;
+}
+
 export interface Comment {
   id: string;
   recordId: string;
@@ -152,6 +158,12 @@ export const dataApi = {
 
   createComment: (recordId: string, text: string) =>
     apiPost<Comment>(`/v1/records/${recordId}/comments`, { body: asRichText(text) }),
+
+  /** Options for a linked-record picker: records of the target table as {id, label}. */
+  linkOptions: (tableId: string, search?: string) =>
+    apiRequest<{ data: LinkedRef[] }>(`/v1/tables/${tableId}/record-links`, {
+      query: search ? { search } : {},
+    }),
 
   listBases: (workspaceId: string) => apiList<Base>(`/v1/workspaces/${workspaceId}/bases`, { query: { limit: 100 } }),
 

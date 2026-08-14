@@ -8,6 +8,7 @@ use App\Models\Record;
 use App\Models\Table;
 use App\Support\FieldTypes;
 use App\Support\Permissions;
+use App\Support\RecordLinks;
 use App\Support\RecordQueryEngine;
 use App\Support\TenantContext;
 use Illuminate\Http\Request;
@@ -38,8 +39,11 @@ class RecordController extends Controller
         $hasMore = $rows->count() > $limit;
         $rows = $rows->take($limit);
 
+        $lf = RecordLinks::linkFields($tableId);
+        $labels = RecordLinks::labelMap($lf, $rows);
+
         return response()->json([
-            'data' => $rows->map(fn (Record $r) => $this->dto($r))->values()->all(),
+            'data' => $rows->map(fn (Record $r) => $this->dto($r, null, $lf, $labels))->values()->all(),
             'meta' => [
                 'hasMore' => $hasMore,
                 'nextCursor' => $hasMore ? $rows->last()->id : null,
@@ -52,7 +56,37 @@ class RecordController extends Controller
         $this->tenant($request, 'record:read');
         $record = $this->find($tableId, $recordId);
 
-        return response()->json(['data' => $this->dto($record)]);
+        return response()->json(['data' => $this->single($record, $tableId)]);
+    }
+
+    /**
+     * GET /v1/tables/{tableId}/record-links — options for a linked-record picker: each record of
+     * the target table as {id, label}, where the label is its primary-field value. `search`
+     * filters by that title.
+     */
+    public function linkOptions(Request $request, string $tableId)
+    {
+        $this->tenant($request, 'record:read');
+        $table = \App\Models\Table::whereKey($tableId)->whereNull('deleted_at')->first()
+            ?? throw ApiException::notFound('Table not found.');
+        $pf = $table->primary_field_id;
+
+        $search = trim((string) $request->query('search', ''));
+        $limit = min(max((int) $request->query('limit', 25), 1), 50);
+
+        $q = Record::where('table_id', $tableId)->whereNull('deleted_at');
+        if ($pf && $search !== '') {
+            $q->whereRaw("LOWER(JSON_UNQUOTE(JSON_EXTRACT(data, '\$.\"{$pf}\"'))) LIKE ?", ['%'.mb_strtolower($search).'%']);
+        }
+
+        $data = $q->orderBy('created_at')->limit($limit)->get(['id', 'data'])
+            ->map(function (Record $r) use ($pf) {
+                $title = $pf ? ((array) $r->data)[$pf] ?? null : null;
+
+                return ['id' => $r->id, 'label' => is_string($title) && $title !== '' ? $title : 'Untitled'];
+            })->all();
+
+        return response()->json(['data' => $data]);
     }
 
     /** POST /v1/tables/{tableId}/records/query — filter / sort / group / search over the data JSON. */
@@ -82,9 +116,11 @@ class RecordController extends Controller
         $rows = $rows->take($limit);
 
         $project = ! empty($input['fieldIds']) ? array_flip($input['fieldIds']) : null;
+        $lf = RecordLinks::linkFields($tableId);
+        $labels = RecordLinks::labelMap($lf, $rows);
 
         return response()->json([
-            'data' => $rows->map(fn (Record $r) => $this->dto($r, $project))->values()->all(),
+            'data' => $rows->map(fn (Record $r) => $this->dto($r, $project, $lf, $labels))->values()->all(),
             'meta' => [
                 'hasMore' => $hasMore,
                 'nextCursor' => $hasMore ? $this->encodeCursor($offset + $limit) : null,
@@ -126,7 +162,7 @@ class RecordController extends Controller
             ]);
         });
 
-        return response()->json(['data' => $this->dto($record)], 201);
+        return response()->json(['data' => $this->single($record, $tableId)], 201);
     }
 
     public function update(Request $request, string $tableId, string $recordId)
@@ -158,7 +194,7 @@ class RecordController extends Controller
             'updated_at' => Carbon::now(),
         ])->save();
 
-        return response()->json(['data' => $this->dto($record)]);
+        return response()->json(['data' => $this->single($record, $tableId)]);
     }
 
     public function bulkDelete(Request $request, string $tableId)
@@ -190,6 +226,15 @@ class RecordController extends Controller
         Permissions::authorize($tenant, $action);
 
         return $tenant;
+    }
+
+    /** dto for a single record with its linked fields expanded to {id,label}. */
+    private function single(Record $r, string $tableId): array
+    {
+        $lf = RecordLinks::linkFields($tableId);
+        $labels = RecordLinks::labelMap($lf, [$r]);
+
+        return $this->dto($r, null, $lf, $labels);
     }
 
     private function find(string $tableId, string $recordId): Record
@@ -240,12 +285,22 @@ class RecordController extends Controller
             throw ApiException::validation($issues);
         }
 
+        // Linked-record cells are stored as bare id arrays, whatever shape the client sent.
+        foreach ($fields as $fieldId => $value) {
+            if (in_array($writable[$fieldId] ?? '', ['linkedRecord', 'parentRecord'], true)) {
+                $fields[$fieldId] = RecordLinks::normalize($value);
+            }
+        }
+
         return $fields;
     }
 
-    private function dto(Record $r, ?array $project = null): array
+    private function dto(Record $r, ?array $project = null, array $linkFields = [], array $labels = []): array
     {
         $fields = (array) ($r->data ?? []);
+        if (! empty($linkFields)) {
+            $fields = RecordLinks::expand($fields, $linkFields, $labels);
+        }
         if ($project !== null) {
             $fields = array_intersect_key($fields, $project);
         }

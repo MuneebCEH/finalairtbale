@@ -7,6 +7,7 @@ import { cn } from '@/lib/cn';
 import { dataApi, type Field } from '../data/api';
 
 import { AttachmentPreview } from './attachment-preview';
+import { LinkedRecordEditor } from './linked-record-editor';
 
 /**
  * Cell rendering and editing.
@@ -231,6 +232,26 @@ function CellDisplay({
         </a>
       );
 
+    case 'linkedRecord':
+    case 'parentRecord':
+    case 'childRecords': {
+      const refs = Array.isArray(value) ? (value as { id: string; label?: string }[]) : [];
+      if (refs.length === 0) return null;
+      return (
+        <span className="flex gap-1 overflow-hidden">
+          {refs.slice(0, 4).map((ref) => (
+            <span
+              key={ref.id}
+              className="shrink-0 truncate rounded bg-sunken px-1.5 py-0.5 text-xs text-accent-text"
+            >
+              {ref.label ?? ref.id}
+            </span>
+          ))}
+          {refs.length > 4 && <span className="text-xs text-tertiary">+{refs.length - 4}</span>}
+        </span>
+      );
+    }
+
     default:
       return <span className="truncate">{String(value)}</span>;
   }
@@ -278,6 +299,10 @@ function CellEditor({
         ))}
       </select>
     );
+  }
+
+  if (field.type === 'linkedRecord' || field.type === 'parentRecord') {
+    return <LinkedRecordEditor field={field} value={value} onCommit={onCommit} />;
   }
 
   return (

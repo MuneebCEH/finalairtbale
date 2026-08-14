@@ -33,12 +33,13 @@ class ProjectTrackerSeeder
             'created_by_id' => $owner->id,
         ]);
 
-        $this->projects($base, $owner);
-        $this->tasks($base, $owner);
+        $projects = $this->projects($base, $owner);
+        $this->tasks($base, $owner, $projects);
         $this->team($base, $owner);
     }
 
-    private function projects(Base $base, User $owner): void
+    /** @return array{table: Table, byName: array<string,string>} */
+    private function projects(Base $base, User $owner): array
     {
         $t = $this->table($base, 'Projects', $owner, 0);
         $name = $this->field($t, 'Name', 'singleLineText', 0, ['isPrimary' => true]);
@@ -61,10 +62,13 @@ class ProjectTrackerSeeder
             ['Customer Portal', 'on_hold', 'high', 'Ravi Patel', '2026-08-10', '2026-10-05', 25, 'Self-service portal for enterprise clients.'],
             ['Analytics Dashboard', 'active', 'medium', 'Mei Lin', '2026-08-05', '2026-09-10', 45, 'Executive KPI dashboard.'],
         ];
-        $this->fill($t, $rows, [$name, $status, $priority, $owner_f, $start, $due, $progress, $desc], $owner);
+        $byName = $this->fill($t, $rows, [$name, $status, $priority, $owner_f, $start, $due, $progress, $desc], $owner);
+
+        return ['table' => $t, 'byName' => $byName];
     }
 
-    private function tasks(Base $base, User $owner): void
+    /** @param array{table: Table, byName: array<string,string>} $projects */
+    private function tasks(Base $base, User $owner, array $projects): void
     {
         $t = $this->table($base, 'Tasks', $owner, 1);
         $name = $this->field($t, 'Name', 'singleLineText', 0, ['isPrimary' => true]);
@@ -76,18 +80,23 @@ class ProjectTrackerSeeder
         $assignee = $this->field($t, 'Assignee', 'singleLineText', 3);
         $due = $this->field($t, 'Due Date', 'date', 4);
         $notes = $this->field($t, 'Notes', 'longText', 5);
+        // Linked-record field pointing at the Projects table.
+        $project = $this->field($t, 'Project', 'linkedRecord', 6, [
+            'options' => ['linkedTableId' => $projects['table']->id],
+        ]);
 
+        $p = fn (string $name) => isset($projects['byName'][$name]) ? [$projects['byName'][$name]] : [];
         $rows = [
-            ['Design homepage hero', 'in_progress', 'high', 'Amara Okafor', '2026-08-18', 'Three variations for review.'],
-            ['Set up CI pipeline', 'done', 'medium', 'Ravi Patel', '2026-08-12', 'GitHub Actions + tests.'],
-            ['Write API docs', 'backlog', 'low', 'Mei Lin', '2026-08-25', ''],
-            ['User interviews', 'review', 'high', 'Amara Okafor', '2026-08-20', '5 enterprise customers.'],
-            ['Migrate auth module', 'in_progress', 'urgent', 'Ravi Patel', '2026-08-16', 'Blocked on secrets.'],
-            ['QA regression pass', 'backlog', 'medium', 'Mei Lin', '2026-08-28', ''],
-            ['Finalize color tokens', 'done', 'low', 'Amara Okafor', '2026-08-10', ''],
-            ['Load test the grid', 'backlog', 'high', 'Ravi Patel', '2026-09-02', '1M rows target.'],
+            ['Design homepage hero', 'in_progress', 'high', 'Amara Okafor', '2026-08-18', 'Three variations for review.', $p('Website Redesign')],
+            ['Set up CI pipeline', 'done', 'medium', 'Ravi Patel', '2026-08-12', 'GitHub Actions + tests.', $p('Mobile App v2')],
+            ['Write API docs', 'backlog', 'low', 'Mei Lin', '2026-08-25', '', $p('Customer Portal')],
+            ['User interviews', 'review', 'high', 'Amara Okafor', '2026-08-20', '5 enterprise customers.', $p('Website Redesign')],
+            ['Migrate auth module', 'in_progress', 'urgent', 'Ravi Patel', '2026-08-16', 'Blocked on secrets.', $p('Mobile App v2')],
+            ['QA regression pass', 'backlog', 'medium', 'Mei Lin', '2026-08-28', '', $p('Analytics Dashboard')],
+            ['Finalize color tokens', 'done', 'low', 'Amara Okafor', '2026-08-10', '', $p('Brand Refresh')],
+            ['Load test the grid', 'backlog', 'high', 'Ravi Patel', '2026-09-02', '1M rows target.', $p('Analytics Dashboard')],
         ];
-        $this->fill($t, $rows, [$name, $status, $priority, $assignee, $due, $notes], $owner);
+        $this->fill($t, $rows, [$name, $status, $priority, $assignee, $due, $notes, $project], $owner);
     }
 
     private function team(Base $base, User $owner): void
@@ -160,18 +169,22 @@ class ProjectTrackerSeeder
         ]);
     }
 
-    /** @param array<int,array> $rows  @param Field[] $fields */
-    private function fill(Table $t, array $rows, array $fields, User $owner): void
+    /**
+     * @param array<int,array> $rows  @param Field[] $fields
+     * @return array<string,string> primary-value => recordId, so later tables can link to these
+     */
+    private function fill(Table $t, array $rows, array $fields, User $owner): array
     {
         $now = Carbon::now();
         $seq = 0;
+        $byName = [];
         foreach ($rows as $row) {
             $seq++;
             $data = [];
             foreach ($fields as $i => $field) {
                 $data[$field->id] = $row[$i];
             }
-            Record::create([
+            $record = Record::create([
                 'organization_id' => $t->organization_id,
                 'table_id' => $t->id,
                 'data' => $data,
@@ -182,7 +195,10 @@ class ProjectTrackerSeeder
                 'created_at' => $now,
                 'updated_at' => $now,
             ]);
+            $byName[(string) $row[0]] = $record->id; // row[0] is always the primary Name
         }
         $t->forceFill(['record_count' => count($rows), 'auto_number_seq' => $seq])->save();
+
+        return $byName;
     }
 }
