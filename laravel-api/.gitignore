@@ -25,3 +25,6 @@ Thumbs.db
 
 # cPanel deployment bundle
 /dist-cpanel
+
+# Imported Airtable data (may contain PHI) — never commit
+/storage/app/airtable-import
