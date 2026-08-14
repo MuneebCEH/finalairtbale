@@ -5,6 +5,7 @@ namespace App\Http\Middleware;
 use App\Exceptions\ApiException;
 use App\Models\Base;
 use App\Models\OrganizationMember;
+use App\Models\Record;
 use App\Models\Table;
 use App\Models\User;
 use App\Models\Workspace;
@@ -56,6 +57,14 @@ class ResolveTenant
             $orgId = $table?->organization_id;
             if ($table) {
                 $request->attributes->set('resolved_table', $table);
+            }
+        }
+
+        if (! $orgId && ($recordId = $request->route('recordId'))) {
+            $record = Record::whereKey($recordId)->whereNull('deleted_at')->first();
+            $orgId = $record?->organization_id;
+            if ($record) {
+                $request->attributes->set('resolved_record', $record);
             }
         }
 

@@ -1,12 +1,15 @@
 <?php
 
+use App\Http\Controllers\AttachmentController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BaseController;
+use App\Http\Controllers\CommentController;
 use App\Http\Controllers\FieldController;
 use App\Http\Controllers\HealthController;
 use App\Http\Controllers\MeController;
 use App\Http\Controllers\OrganizationController;
 use App\Http\Controllers\RecordController;
+use App\Http\Controllers\SectionsController;
 use App\Http\Controllers\WorkspaceController;
 use Illuminate\Support\Facades\Route;
 
@@ -30,6 +33,7 @@ Route::prefix('v1')->group(function () {
         Route::post('register', [AuthController::class, 'register']);
         Route::post('verify-email', [AuthController::class, 'verifyEmail']);
         Route::post('login', [AuthController::class, 'login']);
+        Route::post('mfa/verify', [AuthController::class, 'mfaVerify']);
         Route::post('logout', [AuthController::class, 'logout']);
         Route::post('refresh', [AuthController::class, 'refresh']);
         Route::post('password/forgot', [AuthController::class, 'forgotPassword']);
@@ -86,6 +90,13 @@ Route::prefix('v1')->group(function () {
             Route::get('tables/{tableId}/records/{recordId}', [RecordController::class, 'show']);
             Route::patch('tables/{tableId}/records/{recordId}', [RecordController::class, 'update']);
             Route::delete('tables/{tableId}/records', [RecordController::class, 'bulkDelete']);
+
+            // Comments, attachments, and the (currently empty) forms/automations sections.
+            Route::get('records/{recordId}/comments', [CommentController::class, 'list']);
+            Route::post('records/{recordId}/comments', [CommentController::class, 'create']);
+            Route::post('bases/{baseId}/attachments', [AttachmentController::class, 'upload']);
+            Route::get('tables/{tableId}/forms', [SectionsController::class, 'forms']);
+            Route::get('bases/{baseId}/automations', [SectionsController::class, 'automations']);
         });
     });
 });

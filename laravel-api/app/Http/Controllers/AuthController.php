@@ -100,6 +100,13 @@ class AuthController extends Controller
             ->cookie(...$this->cookieArgs($issued['token']));
     }
 
+    public function mfaVerify(Request $request)
+    {
+        // No demo account has a second factor enabled, so login never issues an mfaToken; this
+        // exists so the frontend's MFA step has a well-formed endpoint to call.
+        throw new ApiException('MALFORMED_REQUEST', 'That verification code is invalid or has expired.');
+    }
+
     public function logout(Request $request)
     {
         $token = $request->cookie($this->sessions->cookieName());
