@@ -63,6 +63,10 @@ class DatabaseSeeder extends Seeder
         // A populated base so the grid has something to show on first login.
         $this->demoBase($northwind, $ops, $users['owner@demo.tessera.local'], $now);
 
+        // A richer base (Projects/Tasks/Team, statuses + dates) so Kanban, Calendar, Timeline and
+        // Gallery all render with real data.
+        (new ProjectTrackerSeeder)->run($northwind, $ops, $users['owner@demo.tessera.local']);
+
         // The editor and viewer only belong to Operations — Sales must stay invisible to them.
         $this->workspaceMember($ops, $users['editor@demo.tessera.local'], 'editor');
         $this->workspaceMember($ops, $users['viewer@demo.tessera.local'], 'viewer');
