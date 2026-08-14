@@ -3,6 +3,8 @@
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\HealthController;
 use App\Http\Controllers\MeController;
+use App\Http\Controllers\OrganizationController;
+use App\Http\Controllers\WorkspaceController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -43,5 +45,20 @@ Route::prefix('v1')->group(function () {
     Route::middleware('session')->group(function () {
         Route::get('me', [MeController::class, 'show']);
         Route::patch('me', [MeController::class, 'update']);
+        Route::get('me/organizations', [MeController::class, 'organizations']);
+    });
+
+    // Organizations & workspaces. Creating an org needs no tenant (it makes one); everything else
+    // is tenant-scoped — the `tenant` middleware enforces membership (404 on isolation).
+    Route::middleware('session')->group(function () {
+        Route::post('organizations', [OrganizationController::class, 'create']);
+
+        Route::middleware('tenant')->group(function () {
+            Route::get('organizations/{orgId}', [OrganizationController::class, 'show']);
+            Route::get('organizations/{orgId}/members', [OrganizationController::class, 'listMembers']);
+            Route::get('organizations/{orgId}/workspaces', [WorkspaceController::class, 'list']);
+            Route::post('organizations/{orgId}/workspaces', [WorkspaceController::class, 'create']);
+            Route::get('workspaces/{workspaceId}', [WorkspaceController::class, 'show']);
+        });
     });
 });

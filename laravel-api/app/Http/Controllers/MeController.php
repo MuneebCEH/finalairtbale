@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Exceptions\ApiException;
+use App\Models\OrganizationMember;
 use App\Models\User;
 use Illuminate\Http\Request;
 
@@ -53,6 +54,36 @@ class MeController extends Controller
         }
 
         return response()->json(['data' => $user->fresh()->toPublicArray()]);
+    }
+
+    /**
+     * GET /v1/me/organizations — the orgs the caller belongs to. Derived from membership, so it is
+     * the one place it is safe to read across tenants: it can only ever return the caller's own.
+     */
+    public function organizations(Request $request)
+    {
+        /** @var User $user */
+        $user = $request->attributes->get('auth_user');
+
+        $rows = OrganizationMember::with('organization')
+            ->where('user_id', $user->id)
+            ->where('status', 'active')
+            ->get()
+            ->filter(fn (OrganizationMember $m) => $m->organization !== null && $m->organization->deleted_at === null)
+            ->map(fn (OrganizationMember $m) => [
+                'id' => $m->organization->id,
+                'name' => $m->organization->name,
+                'slug' => $m->organization->slug,
+                'logoUrl' => $m->organization->logo_url,
+                'plan' => $m->organization->plan,
+                'status' => $m->organization->status,
+                'role' => $m->role,
+                'joinedAt' => $m->joined_at?->copy()->utc()->format('Y-m-d\TH:i:s.v\Z'),
+            ])
+            ->values()
+            ->all();
+
+        return response()->json(['data' => $rows]);
     }
 
     private function strict(Request $request, array $allowed): void
