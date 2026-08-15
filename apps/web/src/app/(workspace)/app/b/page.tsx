@@ -114,26 +114,26 @@ function BasePageInner() {
   const activeTable = tables.data?.find((table) => table.id === activeTableId);
 
   return (
-    <main id="main" className="flex h-[calc(100vh-3rem)] flex-col">
-      <div className="border-b border-line px-6 py-3">
-        <nav aria-label="Breadcrumb" className="text-sm text-secondary">
-          <Link href={`/app/o?org=${orgSlug}`} className="hover:text-primary">
-            Workspaces
-          </Link>
-          <span aria-hidden="true" className="mx-1.5 text-tertiary">
-            /
-          </span>
+    // Pinned below the 3rem app header: the page body then can never scroll — only the grid
+    // does — so the base header, tabs and toolbar hold still exactly like Airtable's.
+    <main id="main" className="fixed inset-x-0 bottom-0 top-12 flex flex-col overflow-hidden">
+      {/* One slim header row, Airtable-style: back-link + base name on the left, the base's
+          sections beside it. A stacked breadcrumb + title + tab rows ate three lines of grid. */}
+      <div className="flex shrink-0 items-center gap-4 border-b border-line px-4 py-1.5">
+        <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-2 text-sm">
           <Link
             href={`/app/w?org=${orgSlug}&ws=${base.data?.workspaceId}`}
-            className="hover:text-primary"
+            className="shrink-0 text-secondary hover:text-primary"
+            aria-label="Back to bases"
           >
-            Bases
+            ‹
           </Link>
+          <h1 className="truncate text-base font-semibold tracking-tight text-primary">
+            {base.data?.name}
+          </h1>
         </nav>
-        <h1 className="mt-1 text-lg font-semibold tracking-tight text-primary">{base.data?.name}</h1>
+        <BaseTabs active={section} onChange={setSection} />
       </div>
-
-      <BaseTabs active={section} onChange={setSection} />
 
       {section !== 'data' ? (
         <div className="min-h-0 flex-1 overflow-auto">
@@ -160,10 +160,11 @@ function BasePageInner() {
                 role="tab"
                 aria-selected={table.id === activeTableId}
                 onClick={() => {
-                  // Airtable's gesture: first click selects the table, a second click on the
-                  // already-active tab opens its menu.
+                  // Airtable's gesture: first click selects the table, a click on the
+                  // already-active tab opens its menu. Opening only (never toggling closed)
+                  // means a double-click still leaves the menu open instead of flashing it.
                   if (table.id === activeTableId) {
-                    setTableMenuFor((open) => (open === table.id ? null : table.id));
+                    setTableMenuFor(table.id);
                   } else {
                     setActiveTableId(table.id);
                     setTableMenuFor(null);

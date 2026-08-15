@@ -33,7 +33,7 @@ export function BaseTabs({
   counts?: Partial<Record<BaseSection, number>>;
 }) {
   return (
-    <nav aria-label="Base sections" className="flex items-center gap-1 border-b border-line px-3">
+    <nav aria-label="Base sections" className="flex shrink-0 items-center gap-1">
       {BASE_SECTIONS.map((section) => {
         const count = counts?.[section];
         const isActive = section === active;

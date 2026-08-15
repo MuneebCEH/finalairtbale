@@ -593,7 +593,7 @@ export function GridView({
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center gap-2 border-b border-line px-3 py-1">
+      <div className="flex shrink-0 items-center gap-2 border-b border-line px-3 py-1">
         <ViewMenu
           tableId={tableId}
           tableName={tableName}
@@ -688,13 +688,11 @@ export function GridView({
         aria-colcount={fields.length}
         className="flex min-h-0 flex-1 flex-col outline-none"
       >
-      <div className="flex items-center gap-2 border-b border-line px-3 py-2">
-        <span className="text-sm font-medium text-primary">{tableName}</span>
-        <span className="text-xs text-tertiary">
-          {records.length} record{records.length === 1 ? '' : 's'}
-          {recordsQuery.data?.meta.hasMore ? '+' : ''}
-        </span>
-        <div className="ml-auto flex items-center gap-2">
+      {/* This strip appears only when it has something to say — a selection to act on or a
+          failed edit. Kept out of the way otherwise so the toolbar sits right on the columns,
+          the way Airtable's grid does. */}
+      {(selectedIds.size > 0 || updateCell.isError) && (
+        <div className="flex shrink-0 items-center gap-2 border-b border-line bg-accent-subtle/40 px-3 py-1.5">
           {updateCell.isError && (
             <span role="alert" className="text-xs text-danger-text">
               {updateCell.error instanceof ApiError && updateCell.error.code === 'RECORD_VERSION_CONFLICT'
@@ -703,10 +701,8 @@ export function GridView({
             </span>
           )}
           {selectedIds.size > 0 && (
-            <>
-              <span className="text-xs text-secondary">
-                {selectedIds.size} selected
-              </span>
+            <div className="ml-auto flex items-center gap-2">
+              <span className="text-xs text-secondary">{selectedIds.size} selected</span>
               <Button
                 size="sm"
                 variant="danger"
@@ -722,13 +718,10 @@ export function GridView({
               <Button size="sm" variant="ghost" onClick={() => setSelectedIds(new Set())}>
                 Clear
               </Button>
-            </>
+            </div>
           )}
-          <Button size="sm" onClick={() => addRecord.mutate()} loading={addRecord.isPending}>
-            Add record
-          </Button>
         </div>
-      </div>
+      )}
 
       <div ref={scrollRef} className="relative flex-1 overflow-auto">
         <div style={{ width: totalWidth }}>
