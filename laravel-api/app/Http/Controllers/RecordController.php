@@ -128,41 +128,65 @@ class RecordController extends Controller
         ]);
     }
 
+    /**
+     * Accepts both creation shapes the app has ever used: the batch `{records: [{fields}, …]}`
+     * the web grid sends (the NestJS contract), and the single `{fields}` shape. An empty
+     * `fields` object is a valid blank row — that is exactly what the grid's "Add record" sends.
+     */
     public function create(Request $request, string $tableId)
     {
         $tenant = $this->tenant($request, 'record:create');
-        $this->strict($request, ['fields']);
-        $request->validate(['fields' => ['required', 'array']]);
+        $this->strict($request, ['fields', 'records']);
+        $request->validate([
+            'records' => ['sometimes', 'array', 'min:1', 'max:100'],
+            'records.*.fields' => ['sometimes', 'array'],
+            'fields' => ['sometimes', 'array'],
+        ]);
 
         /** @var Table $table */
         $table = $request->attributes->get('resolved_table');
-        $fields = $this->writableFields($tableId);
-        $data = $this->sanitize($request->input('fields', []), $fields);
+        $writable = $this->writableFields($tableId);
 
-        $record = DB::transaction(function () use ($table, $tenant, $data) {
+        $isBatch = $request->has('records');
+        $batch = $isBatch
+            ? array_map(fn ($row) => (array) ($row['fields'] ?? []), (array) $request->input('records'))
+            : [(array) $request->input('fields', [])];
+
+        $created = DB::transaction(function () use ($table, $tenant, $batch, $writable) {
             $locked = Table::whereKey($table->id)->lockForUpdate()->first();
-            $seq = ((int) $locked->auto_number_seq) + 1;
-            $locked->forceFill([
-                'auto_number_seq' => $seq,
-                'record_count' => ((int) $locked->record_count) + 1,
-            ])->save();
-
+            $seq = (int) $locked->auto_number_seq;
             $now = Carbon::now();
 
-            return Record::create([
-                'organization_id' => $tenant->organizationId,
-                'table_id' => $table->id,
-                'data' => $data,
-                'version' => 1,
-                'auto_number' => $seq,
-                'created_by' => $tenant->userId(),
-                'updated_by' => $tenant->userId(),
-                'created_at' => $now,
-                'updated_at' => $now,
-            ]);
+            $out = [];
+            foreach ($batch as $fields) {
+                $out[] = Record::create([
+                    'organization_id' => $tenant->organizationId,
+                    'table_id' => $table->id,
+                    'data' => $this->sanitize($fields, $writable),
+                    'version' => 1,
+                    'auto_number' => ++$seq,
+                    'created_by' => $tenant->userId(),
+                    'updated_by' => $tenant->userId(),
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ]);
+            }
+
+            $locked->forceFill([
+                'auto_number_seq' => $seq,
+                'record_count' => ((int) $locked->record_count) + count($out),
+            ])->save();
+
+            return $out;
         });
 
-        return response()->json(['data' => $this->single($record, $tableId)], 201);
+        if ($isBatch) {
+            return response()->json(['data' => [
+                'records' => array_map(fn (Record $r) => $this->single($r, $tableId), $created),
+            ]], 201);
+        }
+
+        return response()->json(['data' => $this->single($created[0], $tableId)], 201);
     }
 
     public function update(Request $request, string $tableId, string $recordId)

@@ -8,11 +8,12 @@ import { ErrorState, LoadingState } from '@/components/ui/feedback';
 import { ApiError } from '@/lib/api-client';
 import { cn } from '@/lib/cn';
 
-import { dataApi, type Field, type RecordRow } from '../data/api';
+import { dataApi, type Field, type RecordRow, type SavedView } from '../data/api';
 import { CalendarView, GalleryView } from '../views/calendar';
 import { KanbanBoard } from '../views/kanban';
 import { ChartView, TimelineView } from '../views/timeline';
 import { ViewToolbar, type ViewState } from '../views/toolbar';
+import { ViewMenu } from '../views/view-menu';
 import { ViewSwitcher, type ViewType } from '../views/view-switcher';
 
 import { Cell, isComputed } from './cell';
@@ -20,7 +21,7 @@ import { RecordPanel } from './record-panel';
 import { useVirtualRows } from './use-virtual-rows';
 
 const ROW_HEIGHT = 32;
-const ROW_NUMBER_WIDTH = 56;
+const ROW_NUMBER_WIDTH = 76;
 const DEFAULT_COLUMN_WIDTH = 180;
 
 interface Selection {
@@ -143,6 +144,100 @@ export function GridView({
   const [search, setSearch] = useState('');
   const [viewType, setViewType] = useState<ViewType>('grid');
 
+  // ── Saved views ───────────────────────────────────────────────────────────
+  // The view list lives on the server; the toolbar edits `view`/`viewType` locally and the
+  // effect below writes them back (debounced) to the active saved view, so a filter set up
+  // today is still there tomorrow — and for everyone else on the table.
+
+  const [activeViewId, setActiveViewId] = useState<string | null>(null);
+  /** Set while a saved config is being applied, so the save effect doesn't echo it back. */
+  const applyingViewRef = useRef(false);
+  const creatingDefaultViewRef = useRef(false);
+
+  const viewsQuery = useQuery({
+    queryKey: ['views', tableId],
+    queryFn: () => dataApi.listViews(tableId),
+  });
+  const views = useMemo(() => viewsQuery.data ?? [], [viewsQuery.data]);
+
+  const applyView = useCallback((saved: SavedView) => {
+    applyingViewRef.current = true;
+    setActiveViewId(saved.id);
+    const config = (saved.config ?? {}) as Partial<ViewState> & { viewType?: ViewType };
+    setView({
+      sorts: config.sorts ?? [],
+      groups: config.groups ?? [],
+      hiddenFieldIds: config.hiddenFieldIds ?? [],
+      rowHeight: config.rowHeight ?? 'short',
+      ...(config.filter ? { filter: config.filter } : {}),
+    });
+    setViewType(config.viewType ?? (saved.type as ViewType) ?? 'grid');
+  }, []);
+
+  // First load: adopt the first saved view, or create the default "Grid view" when the table
+  // has none yet (older tables predate saved views).
+  useEffect(() => {
+    if (!viewsQuery.isSuccess || activeViewId) return;
+    const first = viewsQuery.data[0];
+    if (first) {
+      applyView(first);
+    } else if (!creatingDefaultViewRef.current) {
+      creatingDefaultViewRef.current = true;
+      dataApi
+        .createView(tableId, { name: 'Grid view', type: 'grid' })
+        .then((created) => {
+          setActiveViewId(created.id);
+          void queryClient.invalidateQueries({ queryKey: ['views', tableId] });
+        })
+        .catch(() => {
+          creatingDefaultViewRef.current = false;
+        });
+    }
+  }, [viewsQuery.isSuccess, viewsQuery.data, activeViewId, applyView, tableId, queryClient]);
+
+  // Persist toolbar changes into the active view, debounced so dragging through options makes
+  // one write, not ten.
+  useEffect(() => {
+    if (!activeViewId) return;
+    if (applyingViewRef.current) {
+      applyingViewRef.current = false;
+      return;
+    }
+    const timer = setTimeout(() => {
+      void dataApi.updateView(activeViewId, {
+        type: viewType,
+        config: { ...view, viewType },
+      });
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [view, viewType, activeViewId]);
+
+  // ── Row selection (checkboxes) ────────────────────────────────────────────
+
+  const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set());
+
+  const toggleSelected = useCallback((recordId: string) => {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (!next.delete(recordId)) next.add(recordId);
+      return next;
+    });
+  }, []);
+
+  const deleteSelected = useMutation({
+    mutationFn: async () => {
+      // The bulk endpoint caps at 100 ids per call; larger selections go in slices.
+      const ids = [...selectedIds];
+      for (let i = 0; i < ids.length; i += 100) {
+        await dataApi.deleteRecords(tableId, ids.slice(i, i + 100));
+      }
+    },
+    onSuccess: async () => {
+      setSelectedIds(new Set());
+      await queryClient.invalidateQueries({ queryKey: ['records', tableId] });
+    },
+  });
+
   // The view travels to the server, not applied to the page after it arrives. Filtering a loaded
   // page client-side would filter one page of two hundred and call it the result — right-looking
   // and wrong, and worse the more data there is.
@@ -153,16 +248,33 @@ export function GridView({
   // rename-shaped bug invisible to the typechecker, so the types are now load-bearing.
   const recordsQuery = useQuery({
     queryKey: ['records', tableId, view.filter, view.sorts, view.groups, search],
-    queryFn: () =>
-      dataApi.queryRecords(tableId, {
-        limit: 200,
+    queryFn: async () => {
+      // Follows the cursor until the table is fully loaded (capped), because a grid that quietly
+      // shows one page of a 289-row table reads as lost data — the exact complaint that led here.
+      // Rows are windowed, so a few thousand records render fine.
+      const base = {
         ...(view.filter ? { filter: view.filter } : {}),
         ...(view.sorts.length > 0 ? { sort: view.sorts } : {}),
         // Grouping is an ordering the server applies, so grouped rows arrive already adjacent.
         // Sorting them client-side would only group the page that happened to load.
         ...(view.groups.length > 0 ? { group: view.groups } : {}),
         ...(search.trim() ? { search: search.trim() } : {}),
-      }),
+      };
+      const first = await dataApi.queryRecords(tableId, { limit: 200, ...base });
+      const all = [...first.data];
+      let meta = first.meta;
+      const CAP = 5000;
+      while (meta.hasMore && meta.nextCursor && all.length < CAP) {
+        const page = await dataApi.queryRecords(tableId, {
+          limit: 200,
+          cursor: meta.nextCursor,
+          ...base,
+        });
+        all.push(...page.data);
+        meta = page.meta;
+      }
+      return { data: all, meta };
+    },
   });
 
   const allFields = useMemo(
@@ -316,8 +428,28 @@ export function GridView({
 
   const addRecord = useMutation({
     mutationFn: () => dataApi.createRecords(tableId, [{ fields: {} }]),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['records', tableId] });
+    onSuccess: async (result) => {
+      // On a table larger than one page the new record lives beyond the loaded rows, so a
+      // refetch would create it invisibly — the classic "I clicked Add and nothing happened".
+      // Splice it into the visible page instead; it settles into its real position on the
+      // next natural refetch.
+      const created = result.records ?? [];
+      if (recordsQuery.data?.meta.hasMore && created.length > 0) {
+        queryClient.setQueryData(
+          ['records', tableId, view.filter, view.sorts, view.groups, search],
+          (old: typeof recordsQuery.data) =>
+            old ? { ...old, data: [...created, ...old.data] } : old,
+        );
+        scrollToRow(0);
+        setSelection({ row: 0, column: 0 });
+      } else {
+        await queryClient.invalidateQueries({ queryKey: ['records', tableId] });
+        if (created.length > 0) {
+          // The new row is the last one; put the cursor on it so typing lands there.
+          scrollToRow(records.length);
+          setSelection({ row: records.length, column: 0 });
+        }
+      }
     },
   });
 
@@ -462,6 +594,16 @@ export function GridView({
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-2 border-b border-line px-3 py-1">
+        <ViewMenu
+          tableId={tableId}
+          tableName={tableName}
+          views={views}
+          activeViewId={activeViewId}
+          fields={fields}
+          viewState={view}
+          search={search}
+          onSwitch={applyView}
+        />
         <ViewSwitcher active={viewType} fields={allFields} onChange={setViewType} />
       </div>
 
@@ -560,6 +702,28 @@ export function GridView({
                 : 'That edit could not be saved.'}
             </span>
           )}
+          {selectedIds.size > 0 && (
+            <>
+              <span className="text-xs text-secondary">
+                {selectedIds.size} selected
+              </span>
+              <Button
+                size="sm"
+                variant="danger"
+                loading={deleteSelected.isPending}
+                onClick={() => {
+                  if (window.confirm(`Delete ${selectedIds.size} record${selectedIds.size === 1 ? '' : 's'}?`)) {
+                    deleteSelected.mutate();
+                  }
+                }}
+              >
+                Delete
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setSelectedIds(new Set())}>
+                Clear
+              </Button>
+            </>
+          )}
           <Button size="sm" onClick={() => addRecord.mutate()} loading={addRecord.isPending}>
             Add record
           </Button>
@@ -575,9 +739,20 @@ export function GridView({
             style={{ height: ROW_HEIGHT }}
           >
             <div
-              className="sticky left-0 z-30 shrink-0 border-r border-line bg-sunken"
+              className="sticky left-0 z-30 flex shrink-0 items-center border-r border-line bg-sunken px-2"
               style={{ width: ROW_NUMBER_WIDTH }}
-            />
+            >
+              <input
+                type="checkbox"
+                aria-label="Select all records"
+                checked={records.length > 0 && selectedIds.size >= records.length}
+                onChange={(event) =>
+                  setSelectedIds(
+                    event.target.checked ? new Set(records.map((record) => record.id)) : new Set(),
+                  )
+                }
+              />
+            </div>
             {fields.map((field, columnIndex) => (
               <ColumnHeader
                 key={field.id}
@@ -631,6 +806,8 @@ export function GridView({
                     widthOf={widthOf}
                     selection={selection}
                     editing={editing}
+                    isChecked={selectedIds.has(item.record.id)}
+                    onToggleCheck={toggleSelected}
                     onSelect={(row, column) => setSelection({ row, column })}
                     onStartEdit={(row, column) => {
                       setSelection({ row, column });
@@ -645,6 +822,24 @@ export function GridView({
               })}
             </div>
           </div>
+
+          {/* Airtable's "+" row: always at the bottom of the data, one click adds a record. */}
+          <button
+            type="button"
+            onClick={() => addRecord.mutate()}
+            disabled={addRecord.isPending}
+            aria-label="Add record"
+            className="flex w-full items-center border-b border-line text-left hover:bg-sunken"
+            style={{ height: ROW_HEIGHT, width: totalWidth }}
+          >
+            <span
+              className="sticky left-0 flex items-center gap-2 px-3 text-sm text-secondary"
+              style={{ width: ROW_NUMBER_WIDTH * 3 }}
+            >
+              <span aria-hidden="true" className="text-base leading-none">+</span>
+              {addRecord.isPending ? 'Adding…' : 'Add record'}
+            </span>
+          </button>
         </div>
       </div>
       </div>
@@ -684,6 +879,8 @@ function GridRow({
   widthOf,
   selection,
   editing,
+  isChecked,
+  onToggleCheck,
   onSelect,
   onStartEdit,
   onCommit,
@@ -698,6 +895,8 @@ function GridRow({
   widthOf: (field: Field) => number;
   selection: Selection | null;
   editing: Selection | null;
+  isChecked: boolean;
+  onToggleCheck: (recordId: string) => void;
   onSelect: (row: number, column: number) => void;
   onStartEdit: (row: number, column: number) => void;
   onCommit: (value: unknown) => void;
@@ -711,19 +910,33 @@ function GridRow({
     <div
       role="row"
       aria-rowindex={rowIndex + 1}
-      className={cn('group/row flex', isSelectedRow && 'bg-accent-subtle/30')}
+      className={cn(
+        'group/row flex',
+        (isSelectedRow || isChecked) && 'bg-accent-subtle/30',
+      )}
       style={{ height: ROW_HEIGHT }}
     >
-      {/* Row number, frozen. Shows the auto-number, which is stable across sorts and filters. */}
+      {/* Row number, frozen. The checkbox appears on hover (or stays once checked), the way a
+          spreadsheet keeps its margin quiet until you need to act on rows. */}
       <div
         className={cn(
-          'sticky left-0 z-10 flex shrink-0 items-center justify-end border-b border-r border-line px-2',
+          'sticky left-0 z-10 flex shrink-0 items-center gap-1 border-b border-r border-line px-2',
           'font-mono text-xs tabular-nums text-tertiary',
-          isSelectedRow ? 'bg-accent-subtle' : 'bg-surface',
+          isSelectedRow || isChecked ? 'bg-accent-subtle' : 'bg-surface',
         )}
         style={{ width: ROW_NUMBER_WIDTH }}
       >
-        <span className="group-hover/row:hidden">{record.autoNumber}</span>
+        <input
+          type="checkbox"
+          aria-label={`Select row ${record.autoNumber}`}
+          checked={isChecked}
+          onChange={() => onToggleCheck(record.id)}
+          onClick={(event) => event.stopPropagation()}
+          className={cn(
+            isChecked ? 'block' : 'hidden group-hover/row:block',
+          )}
+        />
+        <span className={cn('ml-auto', isChecked && 'hidden')}>{record.autoNumber}</span>
         <button
           type="button"
           aria-label={`Expand row ${record.autoNumber}`}

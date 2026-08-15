@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Exceptions\ApiException;
 use App\Models\Base;
 use App\Models\Field;
+use App\Models\Record;
 use App\Models\Table;
 use App\Support\Permissions;
 use App\Support\TenantContext;
@@ -170,6 +171,97 @@ class BaseController extends Controller
         $this->table($request)->delete();
 
         return response()->noContent();
+    }
+
+    /**
+     * POST /v1/tables/{tableId}/duplicate — copy a table: fields, saved views, and (optionally)
+     * records. Record data is keyed by field id, so every copied record's keys are remapped from
+     * the old field ids to the new — copying the JSON as-is would orphan every cell.
+     */
+    public function duplicateTable(Request $request, string $tableId)
+    {
+        $tenant = $this->tenant($request, 'table:create');
+        $this->strict($request, ['withRecords']);
+        $request->validate(['withRecords' => ['sometimes', 'boolean']]);
+        $withRecords = $request->boolean('withRecords', true);
+
+        $source = $this->table($request);
+
+        // "Patients copy", "Patients copy 2", … — first name that is free.
+        $name = "{$source->name} copy";
+        for ($n = 2; Table::where('base_id', $source->base_id)->where('name', $name)->whereNull('deleted_at')->exists(); $n++) {
+            $name = "{$source->name} copy {$n}";
+        }
+
+        $copy = Table::create([
+            'organization_id' => $tenant->organizationId,
+            'base_id' => $source->base_id,
+            'name' => $name,
+            'description' => $source->description,
+            'icon' => $source->icon,
+            'color' => $source->color,
+            'position' => (int) Table::where('base_id', $source->base_id)->max('position') + 1,
+            'created_by_id' => $tenant->userId(),
+        ]);
+
+        $fieldMap = []; // old field id => new field id
+        foreach (Field::where('table_id', $source->id)->whereNull('deleted_at')->orderBy('position')->get() as $field) {
+            $new = $field->replicate(['id']);
+            $new->id = Field::newPrefixedId();
+            $new->table_id = $copy->id;
+            $new->save();
+            $fieldMap[$field->id] = $new->id;
+            if ($field->id === $source->primary_field_id) {
+                $copy->forceFill(['primary_field_id' => $new->id])->save();
+            }
+        }
+
+        $count = 0;
+        if ($withRecords) {
+            Record::where('table_id', $source->id)->whereNull('deleted_at')
+                ->orderBy('auto_number')->chunk(500, function ($records) use ($copy, $fieldMap, &$count) {
+                    foreach ($records as $record) {
+                        $data = [];
+                        foreach ((array) $record->data as $fieldId => $value) {
+                            if (isset($fieldMap[$fieldId])) {
+                                $data[$fieldMap[$fieldId]] = $value;
+                            }
+                        }
+                        $new = $record->replicate(['id']);
+                        $new->id = Record::newPrefixedId();
+                        $new->table_id = $copy->id;
+                        $new->data = $data;
+                        $new->auto_number = ++$count;
+                        $new->save();
+                    }
+                });
+        }
+        $copy->forceFill(['record_count' => $count, 'auto_number_seq' => $count])->save();
+
+        foreach (\App\Models\View::where('table_id', $source->id)->whereNull('deleted_at')->orderBy('position')->get() as $view) {
+            $newView = $view->replicate(['id']);
+            $newView->id = \App\Models\View::newPrefixedId();
+            $newView->table_id = $copy->id;
+            $newView->save();
+        }
+
+        return response()->json(['data' => $this->tableDto($copy->fresh())], 201);
+    }
+
+    /**
+     * POST /v1/tables/{tableId}/clear — Airtable's "Clear data": every record goes, the structure
+     * (fields, views) stays. Soft-deletes so it matches single-record deletion semantics.
+     */
+    public function clearTable(Request $request, string $tableId)
+    {
+        $this->tenant($request, 'record:delete');
+        $table = $this->table($request);
+
+        $deleted = Record::where('table_id', $table->id)->whereNull('deleted_at')
+            ->update(['deleted_at' => \Illuminate\Support\Carbon::now()]);
+        $table->forceFill(['record_count' => 0])->save();
+
+        return response()->json(['data' => ['deleted' => $deleted]]);
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────

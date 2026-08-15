@@ -8,6 +8,7 @@ use App\Http\Controllers\FieldController;
 use App\Http\Controllers\FormController;
 use App\Http\Controllers\HealthController;
 use App\Http\Controllers\ImportController;
+use App\Http\Controllers\ViewController;
 use App\Http\Controllers\MeController;
 use App\Http\Controllers\OrganizationController;
 use App\Http\Controllers\PublicFormController;
@@ -89,6 +90,15 @@ Route::prefix('v1')->group(function () {
             Route::get('tables/{tableId}', [BaseController::class, 'showTable']);
             Route::patch('tables/{tableId}', [BaseController::class, 'updateTable']);
             Route::delete('tables/{tableId}', [BaseController::class, 'deleteTable']);
+            Route::post('tables/{tableId}/duplicate', [BaseController::class, 'duplicateTable']);
+            Route::post('tables/{tableId}/clear', [BaseController::class, 'clearTable']);
+            Route::post('tables/{tableId}/import-rows', [ImportController::class, 'rows']);
+
+            // ── Saved views (Airtable-style named views per table) ───────────
+            Route::get('tables/{tableId}/views', [ViewController::class, 'list']);
+            Route::post('tables/{tableId}/views', [ViewController::class, 'create']);
+            Route::patch('views/{viewId}', [ViewController::class, 'update']);
+            Route::delete('views/{viewId}', [ViewController::class, 'delete']);
 
             Route::get('tables/{tableId}/fields', [FieldController::class, 'list']);
             Route::post('tables/{tableId}/fields', [FieldController::class, 'create']);

@@ -68,6 +68,14 @@ class ResolveTenant
             }
         }
 
+        if (! $orgId && ($viewId = $request->route('viewId'))) {
+            $view = \App\Models\View::whereKey($viewId)->whereNull('deleted_at')->first();
+            $orgId = $view?->organization_id;
+            if ($view) {
+                $request->attributes->set('resolved_view', $view);
+            }
+        }
+
         if (! $orgId && ($formId = $request->route('formId'))) {
             $form = \App\Models\Form::whereKey($formId)->whereNull('deleted_at')->first();
             $orgId = $form?->organization_id;

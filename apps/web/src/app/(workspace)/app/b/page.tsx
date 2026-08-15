@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Alert, ErrorState, LoadingState } from '@/components/ui/feedback';
 import { BaseTabs, type BaseSection } from '@/features/base/base-tabs';
 import { AutomationsSection, FormsSection, InterfacesSection } from '@/features/base/sections';
+import { TableMenu } from '@/features/base/table-menu';
 import { dataApi } from '@/features/data/api';
 import { GridView } from '@/features/grid/grid-view';
 import { ApiError } from '@/lib/api-client';
@@ -55,6 +56,7 @@ function BasePageInner() {
   const [activeTableId, setActiveTableId] = useState<string | null>(null);
   const [addingField, setAddingField] = useState(false);
   const [section, setSection] = useState<BaseSection>('data');
+  const [tableMenuFor, setTableMenuFor] = useState<string | null>(null);
 
   const base = useQuery({
     queryKey: ['base', baseId],
@@ -143,35 +145,68 @@ function BasePageInner() {
         </div>
       ) : (
         <>
-      {/* Table tabs */}
-      <div role="tablist" aria-label="Tables" className="flex items-center gap-1 border-b border-line px-4">
-        {tables.data?.map((table) => (
-          <button
-            key={table.id}
-            role="tab"
-            aria-selected={table.id === activeTableId}
-            onClick={() => setActiveTableId(table.id)}
-            className={cn(
-              'border-b-2 px-3 py-2 text-sm transition-colors duration-fast',
-              table.id === activeTableId
-                ? 'border-accent font-medium text-primary'
-                : 'border-transparent text-secondary hover:text-primary',
-            )}
-          >
-            {table.name}
-          </button>
-        ))}
+      {/* Table tabs — Airtable's strip: a tinted band where the active table reads as a white
+          card fused to the grid below, and long tab lists scroll sideways instead of wrapping
+          into a second row that pushes the grid down. */}
+      <div className="flex items-end gap-1 bg-sunken px-3 pt-1.5">
+        <div
+          role="tablist"
+          aria-label="Tables"
+          className="flex min-w-0 items-end gap-0.5 overflow-x-auto"
+        >
+          {tables.data?.map((table) => (
+            <div key={table.id} className="relative shrink-0">
+              <button
+                role="tab"
+                aria-selected={table.id === activeTableId}
+                onClick={() => {
+                  // Airtable's gesture: first click selects the table, a second click on the
+                  // already-active tab opens its menu.
+                  if (table.id === activeTableId) {
+                    setTableMenuFor((open) => (open === table.id ? null : table.id));
+                  } else {
+                    setActiveTableId(table.id);
+                    setTableMenuFor(null);
+                  }
+                }}
+                className={cn(
+                  'whitespace-nowrap rounded-t-md border border-b-0 px-3 py-1.5 text-sm transition-colors duration-fast',
+                  table.id === activeTableId
+                    ? 'border-line bg-surface font-medium text-primary'
+                    : 'border-transparent text-secondary hover:bg-surface/60 hover:text-primary',
+                )}
+              >
+                {table.name}
+                {table.id === activeTableId && (
+                  <span aria-hidden="true" className="ml-1.5 text-xs text-tertiary">
+                    ▾
+                  </span>
+                )}
+              </button>
+              {tableMenuFor === table.id && (
+                <TableMenu
+                  tableId={table.id}
+                  tableName={table.name}
+                  baseId={baseId}
+                  onDeleted={() => setActiveTableId(null)}
+                  onClose={() => setTableMenuFor(null)}
+                />
+              )}
+            </div>
+          ))}
+        </div>
         <Button
           size="sm"
           variant="ghost"
           onClick={() => createTable.mutate()}
           loading={createTable.isPending}
           aria-label="Add table"
+          className="shrink-0"
         >
           +
         </Button>
 
-        <div className="ml-auto py-1.5">
+        <div className="ml-auto shrink-0 pb-1">
           <Button size="sm" variant="secondary" onClick={() => setAddingField((v) => !v)}>
             Add field
           </Button>

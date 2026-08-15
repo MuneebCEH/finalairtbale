@@ -81,7 +81,7 @@ export function ViewSwitcher({
         className="flex items-center gap-1.5 rounded px-2 py-1 text-sm hover:bg-sunken"
       >
         <span aria-hidden="true">{GLYPHS[active]}</span>
-        {LABELS[active]} view
+        {LABELS[active]}
         <span aria-hidden="true" className="text-xs text-tertiary">
           ▾
         </span>

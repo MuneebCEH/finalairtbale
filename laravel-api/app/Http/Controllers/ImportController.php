@@ -126,6 +126,92 @@ class ImportController extends Controller
         ]], 201);
     }
 
+    /**
+     * POST /v1/tables/{tableId}/import-rows — append spreadsheet rows to an EXISTING table
+     * (Airtable's "Import data" on a table). Columns are matched to fields by name
+     * (case-insensitive); unmatched columns become new fields at the end.
+     */
+    public function rows(Request $request, string $tableId)
+    {
+        /** @var TenantContext $tenant */
+        $tenant = $request->attributes->get('tenant');
+        Permissions::authorize($tenant, 'record:create');
+
+        /** @var \App\Models\Table $table */
+        $table = $request->attributes->get('resolved_table') ?? abort(404);
+
+        $validated = $request->validate([
+            'fields' => ['required', 'array', 'min:1', 'max:200'],
+            'fields.*.name' => ['required', 'string', 'max:120'],
+            'fields.*.type' => ['nullable', 'string'],
+            'rows' => ['required', 'array', 'min:1', 'max:20000'],
+            'rows.*' => ['array'],
+        ]);
+
+        $existing = Field::where('table_id', $table->id)->whereNull('deleted_at')->get();
+        $byName = [];
+        foreach ($existing as $field) {
+            $byName[mb_strtolower(trim($field->name))] = $field;
+        }
+        $maxPos = (int) $existing->max('position');
+
+        // Column i => the field (existing by name, or newly created) plus the type used to coerce.
+        $columns = [];
+        foreach ($validated['fields'] as $i => $def) {
+            $name = trim($def['name']) !== '' ? trim($def['name']) : 'Field '.($i + 1);
+            $found = $byName[mb_strtolower($name)] ?? null;
+            if (! $found) {
+                $type = in_array($def['type'] ?? null, self::ALLOWED_TYPES, true) ? $def['type'] : 'singleLineText';
+                $found = Field::create([
+                    'organization_id' => $tenant->organizationId,
+                    'table_id' => $table->id,
+                    'name' => $name,
+                    'type' => $type,
+                    'position' => ++$maxPos,
+                    'is_primary' => false,
+                    'options' => [],
+                    'created_by_id' => $tenant->userId(),
+                ]);
+                $byName[mb_strtolower($name)] = $found;
+            }
+            $columns[$i] = $found;
+        }
+
+        $now = Carbon::now();
+        $seq = (int) $table->auto_number_seq;
+        $inserted = 0;
+        foreach ($validated['rows'] as $row) {
+            $data = [];
+            foreach (array_values((array) $row) as $i => $value) {
+                if (! isset($columns[$i])) {
+                    continue;
+                }
+                $coerced = $this->coerce($columns[$i]->type, $value);
+                if ($coerced !== null && $coerced !== '') {
+                    $data[$columns[$i]->id] = $coerced;
+                }
+            }
+            Record::create([
+                'organization_id' => $tenant->organizationId,
+                'table_id' => $table->id,
+                'data' => $data,
+                'version' => 1,
+                'auto_number' => ++$seq,
+                'created_by' => $tenant->userId(),
+                'updated_by' => $tenant->userId(),
+                'created_at' => $now,
+                'updated_at' => $now,
+            ]);
+            $inserted++;
+        }
+        $table->forceFill([
+            'record_count' => (int) $table->record_count + $inserted,
+            'auto_number_seq' => $seq,
+        ])->save();
+
+        return response()->json(['data' => ['importedRows' => $inserted, 'tableId' => $table->id]], 201);
+    }
+
     /** Best-effort conversion of a spreadsheet cell to the stored value for its field type. */
     private function coerce(string $type, mixed $value): mixed
     {

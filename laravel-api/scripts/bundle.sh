@@ -28,6 +28,11 @@ tar -C "$ROOT" \
 echo "==> Installing production dependencies"
 ( cd "$BUILD" && composer install --no-dev --optimize-autoloader --no-interaction --quiet )
 
+# composer's post-install package:discover bakes THIS machine's absolute paths into
+# bootstrap/cache/{packages,services}.php — on the Linux host those Windows paths 500 every
+# request. Laravel regenerates them on first boot, so they must not ship.
+rm -f "$BUILD"/bootstrap/cache/*.php
+
 echo "==> Ensuring writable runtime directories exist"
 mkdir -p "$BUILD/storage/framework/cache/data" \
          "$BUILD/storage/framework/sessions" \

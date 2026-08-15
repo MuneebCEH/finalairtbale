@@ -75,7 +75,10 @@ export function ViewToolbar({
   const filterCount = state.filter ? countConditions(state.filter) : 0;
 
   return (
-    <div className="relative flex items-center gap-1 border-b border-line bg-surface px-3 py-1.5 text-sm">
+    <div className="relative border-b border-line bg-surface text-sm">
+      {/* The buttons scroll sideways on narrow screens rather than wrapping into a second row;
+          the dropdown panels live outside this scroller so they are not clipped by it. */}
+      <div className="flex items-center gap-1 overflow-x-auto whitespace-nowrap px-3 py-1.5 [&>*]:shrink-0">
       <ToolbarButton
         label={hiddenCount > 0 ? `${hiddenCount} hidden` : 'Hide fields'}
         icon="◫"
@@ -112,6 +115,7 @@ export function ViewToolbar({
           aria-label="Search records"
           className="h-7 w-40 rounded border border-line bg-sunken px-2 text-sm outline-none focus:border-accent"
         />
+      </div>
       </div>
 
       {open === 'fields' && (

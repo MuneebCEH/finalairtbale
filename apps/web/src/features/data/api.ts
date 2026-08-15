@@ -108,6 +108,18 @@ export interface LinkedRef {
   label: string;
 }
 
+/** A saved view: a named type + toolbar config shared by everyone on the table. */
+export interface SavedView {
+  id: string;
+  tableId: string;
+  name: string;
+  type: string;
+  config: unknown;
+  position: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface Comment {
   id: string;
   recordId: string;
@@ -204,6 +216,40 @@ export const dataApi = {
   listTables: (baseId: string) => apiGet<Table[]>(`/v1/bases/${baseId}/tables`),
 
   createTable: (baseId: string, name: string) => apiPost<Table>(`/v1/bases/${baseId}/tables`, { name }),
+
+  updateTable: (tableId: string, input: { name?: string; description?: string | null }) =>
+    apiPatch<Table>(`/v1/tables/${tableId}`, input),
+
+  deleteTable: (tableId: string) => apiDelete(`/v1/tables/${tableId}`),
+
+  /** Copies a table — fields, saved views, and records (unless withRecords is false). */
+  duplicateTable: (tableId: string, withRecords = true) =>
+    apiPost<Table>(`/v1/tables/${tableId}/duplicate`, { withRecords }),
+
+  /** Airtable's "Clear data": deletes every record, keeps the structure. */
+  clearTable: (tableId: string) =>
+    apiPost<{ deleted: number }>(`/v1/tables/${tableId}/clear`, {}),
+
+  /** Appends parsed spreadsheet rows to an existing table (columns matched to fields by name). */
+  importRowsIntoTable: (
+    tableId: string,
+    payload: {
+      fields: { name: string; type: string }[];
+      rows: (string | number | boolean | null)[][];
+    },
+  ) => apiPost<{ importedRows: number; tableId: string }>(`/v1/tables/${tableId}/import-rows`, payload),
+
+  // ── Saved views ───────────────────────────────────────────────────────────
+
+  listViews: (tableId: string) => apiGet<SavedView[]>(`/v1/tables/${tableId}/views`),
+
+  createView: (tableId: string, input: { name: string; type?: string; config?: unknown }) =>
+    apiPost<SavedView>(`/v1/tables/${tableId}/views`, input),
+
+  updateView: (viewId: string, input: { name?: string; type?: string; config?: unknown; position?: number }) =>
+    apiPatch<SavedView>(`/v1/views/${viewId}`, input),
+
+  deleteView: (viewId: string) => apiDelete(`/v1/views/${viewId}`),
 
   listFields: (tableId: string) => apiGet<Field[]>(`/v1/tables/${tableId}/fields`),
 
