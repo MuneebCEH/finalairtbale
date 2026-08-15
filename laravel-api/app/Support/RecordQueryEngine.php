@@ -35,6 +35,11 @@ class RecordQueryEngine
 
         // group keys act as the leading sort keys.
         foreach (array_merge($input['group'] ?? [], $input['sort'] ?? []) as $s) {
+            // A half-built toolbar entry ("+ Add" clicked, no field picked yet) arrives with an
+            // empty fieldId. Ordering by nothing means "skip it" — it must not be a 500.
+            if (empty($s['fieldId']) || ! is_string($s['fieldId'])) {
+                continue;
+            }
             $this->assertField($s['fieldId']);
             $query->orderByRaw($this->jsonText($s['fieldId']).' '.(($s['direction'] ?? 'asc') === 'desc' ? 'desc' : 'asc'));
         }
@@ -73,6 +78,10 @@ class RecordQueryEngine
     private function condition(array $c): array
     {
         $fieldId = $c['fieldId'] ?? '';
+        // A condition whose field was never picked filters nothing rather than erroring.
+        if ($fieldId === '' || $fieldId === null) {
+            return ['', []];
+        }
         $this->assertField($fieldId);
         $op = $c['operator'] ?? 'is';
         $value = $c['value'] ?? null;

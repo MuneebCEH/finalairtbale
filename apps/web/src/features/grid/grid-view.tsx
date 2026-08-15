@@ -248,16 +248,33 @@ export function GridView({
   // rename-shaped bug invisible to the typechecker, so the types are now load-bearing.
   const recordsQuery = useQuery({
     queryKey: ['records', tableId, view.filter, view.sorts, view.groups, search],
+    // Changing a filter/sort/group re-keys the query; without this the grid unmounts into a
+    // loading state, which also slams shut whichever toolbar panel the user was still using.
+    // Showing the previous rows until the new ones arrive is what Airtable does.
+    placeholderData: (previous) => previous,
     queryFn: async () => {
       // Follows the cursor until the table is fully loaded (capped), because a grid that quietly
       // shows one page of a 289-row table reads as lost data — the exact complaint that led here.
       // Rows are windowed, so a few thousand records render fine.
+      // Entries whose field was never picked (a fresh "+ Add" row) are dropped before the
+      // request — they mean nothing yet, and half-built config must never break the grid.
+      const sorts = view.sorts.filter((entry) => entry.fieldId);
+      const groups = view.groups.filter((entry) => entry.fieldId);
+      const filter =
+        view.filter && view.filter.conditions.length > 0
+          ? {
+              ...view.filter,
+              conditions: view.filter.conditions.filter(
+                (condition) => !('conjunction' in condition) && condition.fieldId,
+              ),
+            }
+          : undefined;
       const base = {
-        ...(view.filter ? { filter: view.filter } : {}),
-        ...(view.sorts.length > 0 ? { sort: view.sorts } : {}),
+        ...(filter && filter.conditions.length > 0 ? { filter } : {}),
+        ...(sorts.length > 0 ? { sort: sorts } : {}),
         // Grouping is an ordering the server applies, so grouped rows arrive already adjacent.
         // Sorting them client-side would only group the page that happened to load.
-        ...(view.groups.length > 0 ? { group: view.groups } : {}),
+        ...(groups.length > 0 ? { group: groups } : {}),
         ...(search.trim() ? { search: search.trim() } : {}),
       };
       const first = await dataApi.queryRecords(tableId, { limit: 200, ...base });
