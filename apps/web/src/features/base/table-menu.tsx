@@ -2,6 +2,7 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 import { Button } from '@/components/ui/button';
 import { Alert } from '@/components/ui/feedback';
@@ -72,18 +73,41 @@ export function TableMenu({
   const error =
     rename.error ?? duplicate.error ?? clear.error ?? remove.error ?? null;
 
+  // The tab strip scrolls sideways, and a scroll container clips its absolutely-positioned
+  // children — the menu rendered inside it exists but is invisible. So the menu is measured
+  // from its anchor and portalled to <body>, above everything, exactly like the attachment
+  // lightbox and the linked-record picker before it.
+  const anchorRef = useRef<HTMLSpanElement>(null);
+  const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
+  useEffect(() => {
+    const rect = anchorRef.current?.parentElement?.getBoundingClientRect();
+    if (rect) {
+      setPos({
+        left: Math.max(8, Math.min(rect.left, window.innerWidth - 296)),
+        top: rect.bottom + 4,
+      });
+    }
+  }, []);
+
+  const anchor = <span ref={anchorRef} aria-hidden="true" className="absolute inset-x-0 bottom-0" />;
+  if (!pos || typeof document === 'undefined') return anchor;
+
   return (
+    <>
+      {anchor}
+      {createPortal(
     <>
       <button
         type="button"
         aria-label="Close table menu"
         onClick={onClose}
-        className="fixed inset-0 z-20 cursor-default"
+        className="fixed inset-0 z-40 cursor-default"
       />
       <div
         role="menu"
         aria-label={`${tableName} table menu`}
-        className="absolute left-0 top-full z-30 mt-1 w-72 rounded-md border border-line bg-surface p-1 shadow-lg"
+        style={{ left: pos.left, top: pos.top }}
+        className="fixed z-50 w-72 rounded-md border border-line bg-surface p-1 shadow-lg"
       >
         {error instanceof ApiError && (
           <Alert tone="danger" className="m-1">
@@ -153,6 +177,9 @@ export function TableMenu({
           </>
         )}
       </div>
+    </>,
+    document.body,
+      )}
     </>
   );
 }
