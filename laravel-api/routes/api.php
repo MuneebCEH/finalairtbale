@@ -7,6 +7,7 @@ use App\Http\Controllers\CommentController;
 use App\Http\Controllers\FieldController;
 use App\Http\Controllers\FormController;
 use App\Http\Controllers\HealthController;
+use App\Http\Controllers\ImportController;
 use App\Http\Controllers\MeController;
 use App\Http\Controllers\OrganizationController;
 use App\Http\Controllers\PublicFormController;
@@ -79,6 +80,7 @@ Route::prefix('v1')->group(function () {
             Route::get('workspaces/{workspaceId}/bases', [BaseController::class, 'listBases']);
             Route::post('workspaces/{workspaceId}/bases', [BaseController::class, 'createBase']);
             Route::post('workspaces/{workspaceId}/bases/from-template', [TemplateController::class, 'create']);
+            Route::post('workspaces/{workspaceId}/import-spreadsheet', [ImportController::class, 'spreadsheet']);
             Route::get('bases/{baseId}', [BaseController::class, 'showBase']);
             Route::patch('bases/{baseId}', [BaseController::class, 'updateBase']);
             Route::delete('bases/{baseId}', [BaseController::class, 'deleteBase']);

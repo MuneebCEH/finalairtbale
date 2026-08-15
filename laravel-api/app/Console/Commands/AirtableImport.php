@@ -49,6 +49,8 @@ class AirtableImport extends Command
         'multipleSelects' => 'multipleSelect',
         'singleCollaborator' => 'singleLineText',
         'multipleCollaborators' => 'longText',
+        'lastModifiedBy' => 'singleLineText',
+        'createdBy' => 'singleLineText',
         'multipleAttachments' => 'attachment',
         // Computed/relational Airtable types are stored as plain text so their VALUE survives.
         'formula' => 'longText',
@@ -219,7 +221,7 @@ class AirtableImport extends Command
         return match ($atype) {
             'singleSelect' => is_array($val) ? ($val['name'] ?? null) : $val,
             'multipleSelects' => is_array($val) ? array_map(fn ($c) => is_array($c) ? ($c['name'] ?? '') : $c, $val) : [],
-            'singleCollaborator' => is_array($val) ? ($val['name'] ?? $val['email'] ?? null) : $val,
+            'singleCollaborator', 'lastModifiedBy', 'createdBy' => is_array($val) ? ($val['name'] ?? $val['email'] ?? null) : $val,
             'multipleCollaborators' => is_array($val)
                 ? implode(', ', array_map(fn ($c) => is_array($c) ? ($c['name'] ?? '') : $c, $val)) : $val,
             'multipleAttachments' => is_array($val) ? array_map(fn ($a) => [

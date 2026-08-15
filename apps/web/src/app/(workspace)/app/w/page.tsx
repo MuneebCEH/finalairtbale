@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Alert, Card, EmptyState, ErrorState, LoadingState } from '@/components/ui/feedback';
 import { Field } from '@/components/ui/field';
 import { dataApi } from '@/features/data/api';
+import { ImportSpreadsheetCard } from '@/features/data/import-spreadsheet-card';
 import { ApiError } from '@/lib/api-client';
 
 /** The bases inside one workspace. */
@@ -27,6 +28,7 @@ function WorkspaceBasesPageInner() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [creating, setCreating] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
   const [name, setName] = useState('');
 
@@ -70,10 +72,19 @@ function WorkspaceBasesPageInner() {
             A base holds related tables, and the views and automations built on them.
           </p>
         </div>
-        {!creating && (
+        {!creating && !importing && (
           <div className="flex gap-2">
             <Button variant="ghost" onClick={() => setShowTemplates((v) => !v)}>
               {showTemplates ? 'Hide templates' : 'Use a template'}
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setImporting(true);
+                setShowTemplates(false);
+              }}
+            >
+              Import Excel
             </Button>
             <Button variant="primary" onClick={() => setCreating(true)}>
               New base
@@ -81,6 +92,14 @@ function WorkspaceBasesPageInner() {
           </div>
         )}
       </header>
+
+      {importing && (
+        <ImportSpreadsheetCard
+          workspaceId={workspaceId}
+          orgSlug={orgSlug}
+          onCancel={() => setImporting(false)}
+        />
+      )}
 
       {showTemplates && (
         <Card className="mt-6 p-5">

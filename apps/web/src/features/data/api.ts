@@ -184,6 +184,21 @@ export const dataApi = {
   createFromTemplate: (workspaceId: string, templateId: string) =>
     apiPost<Base>(`/v1/workspaces/${workspaceId}/bases/from-template`, { templateId }),
 
+  /** Create a base + table from a spreadsheet the browser already parsed (columns → fields, rows → records). */
+  importSpreadsheet: (
+    workspaceId: string,
+    payload: {
+      baseName: string;
+      tableName: string;
+      fields: { name: string; type: string }[];
+      rows: (string | number | boolean | null)[][];
+    },
+  ) =>
+    apiPost<Base & { tableId: string; importedRows: number }>(
+      `/v1/workspaces/${workspaceId}/import-spreadsheet`,
+      payload,
+    ),
+
   getBase: (baseId: string) => apiGet<Base>(`/v1/bases/${baseId}`),
 
   listTables: (baseId: string) => apiGet<Table[]>(`/v1/bases/${baseId}/tables`),
