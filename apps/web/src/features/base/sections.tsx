@@ -16,15 +16,6 @@ import { FormBuilder } from './form-builder';
  * state here says what the thing is and what would put something in it.
  */
 
-interface AutomationSummary {
-  id: string;
-  name: string;
-  enabled: boolean;
-  isLive: boolean;
-  latestVersion: { version: number; status: string } | null;
-  updatedAt: string;
-}
-
 interface FormSummary {
   id: string;
   name: string;
@@ -34,54 +25,8 @@ interface FormSummary {
   submissionCount: number;
 }
 
-export function AutomationsSection({ baseId }: { baseId: string }) {
-  const query = useQuery({
-    queryKey: ['automations', baseId],
-    queryFn: () => apiRequest<{ data: AutomationSummary[] }>(`/v1/bases/${baseId}/automations`),
-  });
-
-  if (query.isPending) return <LoadingState label="Loading automations" />;
-
-  const automations = query.data?.data ?? [];
-
-  if (automations.length === 0) {
-    return (
-      <Empty
-        title="No automations yet"
-        body="An automation watches for something happening in this base — a record created, a field changed, a form submitted — and runs steps in response."
-      />
-    );
-  }
-
-  return (
-    <ul className="divide-y divide-line">
-      {automations.map((automation) => (
-        <li key={automation.id} className="flex items-center gap-3 px-4 py-3">
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium text-primary">{automation.name}</p>
-            <p className="text-xs text-tertiary">
-              {automation.latestVersion
-                ? `Version ${automation.latestVersion.version} · ${automation.latestVersion.status}`
-                : 'No version yet'}
-            </p>
-          </div>
-
-          {/* `enabled` alone is misleading — an automation can be enabled and still not run
-              because nothing is published, so the badge reports the combined truth. */}
-          <span
-            className={
-              automation.isLive
-                ? 'rounded-full bg-success-subtle px-2 py-0.5 text-2xs text-success-text'
-                : 'rounded-full bg-sunken px-2 py-0.5 text-2xs text-tertiary'
-            }
-          >
-            {automation.isLive ? 'Live' : automation.enabled ? 'Not published' : 'Off'}
-          </span>
-        </li>
-      ))}
-    </ul>
-  );
-}
+// The Automations section grew into a full builder; it lives in its own module now.
+export { AutomationsSection } from './automations';
 
 export function FormsSection({ tables }: { tables: { id: string; name: string }[] }) {
   const tableIds = tables.map((t) => t.id);

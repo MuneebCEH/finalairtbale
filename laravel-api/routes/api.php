@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AttachmentController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\AutomationController;
 use App\Http\Controllers\BaseController;
 use App\Http\Controllers\CommentController;
 use App\Http\Controllers\FieldController;
@@ -117,7 +118,13 @@ Route::prefix('v1')->group(function () {
             Route::get('records/{recordId}/comments', [CommentController::class, 'list']);
             Route::post('records/{recordId}/comments', [CommentController::class, 'create']);
             Route::post('bases/{baseId}/attachments', [AttachmentController::class, 'upload']);
-            Route::get('bases/{baseId}/automations', [SectionsController::class, 'automations']);
+
+            // ── Automations (Airtable-style: trigger + actions per table) ────
+            Route::get('bases/{baseId}/automations', [AutomationController::class, 'list']);
+            Route::post('bases/{baseId}/automations', [AutomationController::class, 'create']);
+            Route::patch('automations/{automationId}', [AutomationController::class, 'update']);
+            Route::delete('automations/{automationId}', [AutomationController::class, 'delete']);
+            Route::post('automations/{automationId}/test', [AutomationController::class, 'test']);
 
             // Forms
             Route::get('tables/{tableId}/forms', [FormController::class, 'index']);

@@ -180,6 +180,14 @@ class RecordController extends Controller
             return $out;
         });
 
+        // Automations fire after the write is committed; a failing automation never fails the
+        // user's write. Capped at a few records so a bulk import cannot fan out a storm.
+        if (count($created) <= 5) {
+            foreach ($created as $r) {
+                \App\Support\AutomationRunner::fire('created', $r);
+            }
+        }
+
         if ($isBatch) {
             return response()->json(['data' => [
                 'records' => array_map(fn (Record $r) => $this->single($r, $tableId), $created),
@@ -217,6 +225,8 @@ class RecordController extends Controller
             'updated_by' => $tenant->userId(),
             'updated_at' => Carbon::now(),
         ])->save();
+
+        \App\Support\AutomationRunner::fire('updated', $record);
 
         return response()->json(['data' => $this->single($record, $tableId)]);
     }

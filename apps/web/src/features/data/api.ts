@@ -108,6 +108,23 @@ export interface LinkedRef {
   label: string;
 }
 
+/** One automation: a trigger on a table plus the steps it runs. */
+export interface AutomationDto {
+  id: string;
+  baseId: string;
+  tableId: string;
+  name: string;
+  enabled: boolean;
+  triggerType: 'record_created' | 'record_updated' | 'record_matches';
+  triggerConfig: {
+    conjunction?: 'and' | 'or';
+    conditions?: { fieldId: string; operator: string; value?: string }[];
+  } | null;
+  actions: { type: string; config?: Record<string, unknown> }[];
+  runCount: number;
+  lastRunAt?: string | null;
+}
+
 /** A saved view: a named type + toolbar config shared by everyone on the table. */
 export interface SavedView {
   id: string;
@@ -250,6 +267,22 @@ export const dataApi = {
     apiPatch<SavedView>(`/v1/views/${viewId}`, input),
 
   deleteView: (viewId: string) => apiDelete(`/v1/views/${viewId}`),
+
+  // ── Automations ───────────────────────────────────────────────────────────
+
+  listAutomations: (baseId: string) => apiGet<AutomationDto[]>(`/v1/bases/${baseId}/automations`),
+
+  createAutomation: (baseId: string, input: Partial<AutomationDto> & { name: string; tableId: string }) =>
+    apiPost<AutomationDto>(`/v1/bases/${baseId}/automations`, input),
+
+  updateAutomation: (automationId: string, input: Partial<AutomationDto>) =>
+    apiPatch<AutomationDto>(`/v1/automations/${automationId}`, input),
+
+  deleteAutomation: (automationId: string) => apiDelete(`/v1/automations/${automationId}`),
+
+  /** Runs the steps once against the table's newest record, ignoring the trigger. */
+  testAutomation: (automationId: string) =>
+    apiPost<{ ranAgainst: string; automation: AutomationDto }>(`/v1/automations/${automationId}/test`, {}),
 
   listFields: (tableId: string) => apiGet<Field[]>(`/v1/tables/${tableId}/fields`),
 

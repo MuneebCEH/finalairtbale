@@ -68,6 +68,14 @@ class ResolveTenant
             }
         }
 
+        if (! $orgId && ($automationId = $request->route('automationId'))) {
+            $automation = \App\Models\Automation::whereKey($automationId)->whereNull('deleted_at')->first();
+            $orgId = $automation?->organization_id;
+            if ($automation) {
+                $request->attributes->set('resolved_automation', $automation);
+            }
+        }
+
         if (! $orgId && ($viewId = $request->route('viewId'))) {
             $view = \App\Models\View::whereKey($viewId)->whereNull('deleted_at')->first();
             $orgId = $view?->organization_id;
