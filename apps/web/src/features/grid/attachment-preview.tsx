@@ -52,8 +52,6 @@ export function AttachmentPreview({
 
   if (!file || !mounted) return null;
 
-  const isImage = file.mimeType.startsWith('image/');
-
   /*
    * Portalled to `document.body`, and it has to be.
    *
@@ -110,22 +108,8 @@ export function AttachmentPreview({
             <p className="text-sm text-white/70">
               This file could not be signed for viewing. It may have been removed.
             </p>
-          ) : isImage ? (
-            // A plain <img>, not next/image: the URL is signed, expires within the hour, and is
-            // served from a cookie-free origin the image optimiser cannot fetch through.
-            <img
-              src={file.url}
-              alt={file.filename}
-              className="max-h-full max-w-full object-contain"
-            />
           ) : (
-            <iframe
-              src={file.url}
-              title={file.filename}
-              // Nothing in an uploaded document needs scripts, forms or navigation.
-              sandbox=""
-              className="h-full w-full rounded bg-white"
-            />
+            <FilePreview file={file} large />
           )}
         </div>
 
@@ -169,4 +153,158 @@ function formatBytes(size: number): string {
   if (size < 1024) return `${size} B`;
   if (size < 1024 * 1024) return `${Math.round(size / 1024)} KB`;
   return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+/**
+ * Renders one file by what it actually is. PDFs go through an `<object>` — NOT a sandboxed
+ * iframe: Chrome's built-in PDF viewer refuses to run inside `sandbox` and shows a broken page,
+ * which is exactly the bug this replaced. Audio and video get native players (the medical data
+ * has .mp3 voice notes). Anything else falls back to a download card.
+ */
+export function FilePreview({ file, large = false }: { file: PreviewableFile; large?: boolean }) {
+  const url = file.url ?? '';
+  const mime = file.mimeType ?? '';
+
+  if (mime.startsWith('image/')) {
+    // A plain <img>, not next/image: the URL is signed and served from a cookie-free origin
+    // the image optimiser cannot fetch through.
+    return <img src={url} alt={file.filename} className="max-h-full max-w-full rounded object-contain" />;
+  }
+  if (mime === 'application/pdf' || file.filename.toLowerCase().endsWith('.pdf')) {
+    return (
+      <object data={url} type="application/pdf" className="h-full w-full rounded bg-white" aria-label={file.filename}>
+        <DownloadCard file={file} />
+      </object>
+    );
+  }
+  if (mime.startsWith('audio/') || /\.(mp3|wav|m4a|ogg)$/i.test(file.filename)) {
+    return (
+      <div className={cn('flex flex-col items-center gap-3', large && 'text-white')}>
+        <span aria-hidden="true" className="text-4xl">🎙️</span>
+        <span className="max-w-full truncate text-sm">{file.filename}</span>
+        <audio controls src={url} className="w-72 max-w-full" />
+      </div>
+    );
+  }
+  if (mime.startsWith('video/') || /\.(mp4|mov|webm)$/i.test(file.filename)) {
+    return <video controls src={url} className="max-h-full max-w-full rounded" />;
+  }
+  return <DownloadCard file={file} light={large} />;
+}
+
+function DownloadCard({ file, light = false }: { file: PreviewableFile; light?: boolean }) {
+  return (
+    <div className={cn('flex h-full flex-col items-center justify-center gap-2 p-4', light ? 'text-white' : 'text-secondary')}>
+      <span aria-hidden="true" className="text-3xl">📄</span>
+      <span className="max-w-full truncate text-sm">{file.filename}</span>
+      {file.url && (
+        <a
+          href={file.url}
+          download={file.filename}
+          rel="noopener noreferrer"
+          className="rounded bg-accent-subtle px-3 py-1 text-xs font-medium text-accent-text"
+        >
+          Download · {formatBytes(file.size)}
+        </a>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Airtable's expanded attachment cell: every file in the cell as a large preview card. A card
+ * click drills into the full lightbox (arrows, download). Portalled for the same containing-block
+ * reason as the lightbox above.
+ */
+export function AttachmentGallery({
+  files,
+  title,
+  onClose,
+}: {
+  files: PreviewableFile[];
+  title: string;
+  onClose: () => void;
+}) {
+  const [lightboxAt, setLightboxAt] = useState<number | null>(null);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  if (!mounted) return null;
+
+  if (lightboxAt !== null) {
+    return (
+      <AttachmentPreview files={files} startIndex={lightboxAt} onClose={() => setLightboxAt(null)} />
+    );
+  }
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-6"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div className="flex max-h-full w-full max-w-3xl flex-col rounded-lg bg-surface shadow-lg">
+        <header className="flex shrink-0 items-center gap-2 border-b border-line px-4 py-2.5">
+          <span aria-hidden="true" className="text-sm text-tertiary">📎</span>
+          <span className="min-w-0 flex-1 truncate text-sm font-medium text-primary">{title}</span>
+          <span className="shrink-0 text-xs text-tertiary">
+            {files.length} file{files.length === 1 ? '' : 's'}
+          </span>
+          <button
+            type="button"
+            aria-label="Close attachments"
+            onClick={onClose}
+            className="shrink-0 rounded px-2 py-1 text-secondary hover:bg-sunken hover:text-primary"
+          >
+            ✕
+          </button>
+        </header>
+
+        <div className="grid min-h-0 flex-1 grid-cols-2 gap-3 overflow-y-auto p-4 sm:grid-cols-3">
+          {files.map((file, index) => (
+            <figure key={file.id} className="flex flex-col gap-1">
+              <button
+                type="button"
+                onClick={() => setLightboxAt(index)}
+                aria-label={`Open ${file.filename}`}
+                className="h-44 overflow-hidden rounded border border-line bg-white hover:ring-2 hover:ring-accent"
+              >
+                {file.url && (file.mimeType?.startsWith('image/') ? (
+                  <img src={file.url} alt="" className="h-full w-full object-cover" loading="lazy" />
+                ) : file.mimeType === 'application/pdf' || file.filename.toLowerCase().endsWith('.pdf') ? (
+                  // A shrunken live render of the document — pointer-events off so the click
+                  // lands on the card, not inside the embedded viewer.
+                  <object
+                    data={`${file.url}#toolbar=0&view=FitH`}
+                    type="application/pdf"
+                    aria-hidden="true"
+                    className="pointer-events-none h-full w-full"
+                  >
+                    <span className="flex h-full items-center justify-center text-3xl">📄</span>
+                  </object>
+                ) : (
+                  <span className="flex h-full items-center justify-center text-3xl" aria-hidden="true">
+                    {file.mimeType?.startsWith('audio/') ? '🎙️' : file.mimeType?.startsWith('video/') ? '🎞️' : '📄'}
+                  </span>
+                ))}
+              </button>
+              <figcaption className="truncate text-xs text-secondary" title={file.filename}>
+                {file.filename}
+              </figcaption>
+            </figure>
+          ))}
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
 }

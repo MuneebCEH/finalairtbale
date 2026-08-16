@@ -6,7 +6,7 @@ import { cn } from '@/lib/cn';
 
 import { dataApi, type Field } from '../data/api';
 
-import { AttachmentPreview } from './attachment-preview';
+import { AttachmentGallery, AttachmentPreview } from './attachment-preview';
 import { LinkedRecordEditor } from './linked-record-editor';
 
 /**
@@ -365,6 +365,8 @@ function AttachmentCell({
   const [failure, setFailure] = useState<string | null>(null);
   /** Index of the file being previewed, or null when the lightbox is closed. */
   const [previewing, setPreviewing] = useState<number | null>(null);
+  /** Airtable's "Expand cell" — all of the cell's files as large cards. */
+  const [galleryOpen, setGalleryOpen] = useState(false);
 
   const upload = async (chosen: FileList | null): Promise<void> => {
     if (!chosen || chosen.length === 0) return;
@@ -418,7 +420,9 @@ function AttachmentCell({
         onChange={(event) => void upload(event.target.files)}
       />
 
-      {(wrap ? files : files.slice(0, 3)).map((file) => {
+      {/* Airtable-style: each file is a small white card — images show themselves, documents a
+          typed glyph — rather than a grey name-chip. Names live in the tooltip and the gallery. */}
+      {(wrap ? files : files.slice(0, 6)).map((file) => {
         const isImage = file.mimeType?.startsWith('image/');
 
         if (!file.url) {
@@ -445,7 +449,11 @@ function AttachmentCell({
             onDoubleClick={(event) => event.stopPropagation()}
             aria-label={`Preview ${file.filename}`}
             title={`${file.filename} — ${formatBytes(file.size)}`}
-            className="flex shrink-0 items-center gap-1 rounded bg-sunken px-1 py-0.5 text-2xs text-secondary hover:bg-accent-subtle hover:text-accent-text"
+            className={cn(
+              'flex shrink-0 items-center justify-center overflow-hidden rounded-sm border border-line bg-surface',
+              'hover:ring-2 hover:ring-accent',
+              wrap ? 'h-14 w-11' : 'h-6 w-5',
+            )}
           >
             {isImage ? (
               // A plain <img>, not next/image, and deliberately so: the URL is signed, expires in
@@ -454,20 +462,40 @@ function AttachmentCell({
               <img
                 src={file.url}
                 alt=""
-                width={20}
-                height={20}
-                className="h-5 w-5 rounded-sm object-cover"
+                className="h-full w-full object-cover"
                 loading="lazy"
               />
             ) : (
-              <span aria-hidden="true">{fileGlyph(file.mimeType)}</span>
+              <span aria-hidden="true" className={cn('text-tertiary', wrap ? 'text-lg' : 'text-2xs')}>
+                {fileGlyph(file.mimeType)}
+              </span>
             )}
-            <span className="max-w-[8rem] truncate">{file.filename}</span>
           </button>
         );
       })}
-      {!wrap && files.length > 3 && (
-        <span className="shrink-0 text-2xs text-tertiary">+{files.length - 3}</span>
+      {!wrap && files.length > 6 && (
+        <span className="shrink-0 text-2xs text-tertiary">+{files.length - 6}</span>
+      )}
+
+      {/* Airtable's "Expand cell": every file large, in a gallery. */}
+      {files.length > 0 && (
+        <button
+          type="button"
+          aria-label="Expand attachments"
+          title="Expand cell"
+          onMouseDown={(event) => event.stopPropagation()}
+          onDoubleClick={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            event.stopPropagation();
+            setGalleryOpen(true);
+          }}
+          className={cn(
+            'shrink-0 rounded px-1 text-2xs leading-5 text-tertiary hover:bg-sunken hover:text-accent-text',
+            wrap ? 'opacity-70' : 'opacity-0 focus-visible:opacity-100 group-hover/cell:opacity-100',
+          )}
+        >
+          ⤢
+        </button>
       )}
 
       {/*
@@ -505,6 +533,14 @@ function AttachmentCell({
           files={files}
           startIndex={previewing}
           onClose={() => setPreviewing(null)}
+        />
+      )}
+
+      {galleryOpen && (
+        <AttachmentGallery
+          files={files}
+          title="Attachments"
+          onClose={() => setGalleryOpen(false)}
         />
       )}
     </span>
