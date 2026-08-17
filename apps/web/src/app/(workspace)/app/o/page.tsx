@@ -1,17 +1,16 @@
 'use client';
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import type { Page } from '@tessera/types';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
 
-import { Button } from '@/components/ui/button';
-import { Alert, Card, EmptyState, ErrorState, LoadingState } from '@/components/ui/feedback';
-import { Field } from '@/components/ui/field';
+import { Card, EmptyState, ErrorState, LoadingState } from '@/components/ui/feedback';
 import { HeroButton, PageHero } from '@/components/ui/page-hero';
 import { MembersPanel } from '@/features/data/members-panel';
-import { ApiError, apiGet, apiList, apiPost } from '@/lib/api-client';
+import { WorkspaceWizard } from '@/features/data/workspace-wizard';
+import { ApiError, apiGet, apiList } from '@/lib/api-client';
 
 interface OrganizationSummary {
   id: string;
@@ -50,7 +49,6 @@ export default function OrganizationHomePage() {
 function OrganizationHomePageInner() {
   const searchParams = useSearchParams();
   const orgSlug = searchParams.get('org') ?? '';
-  const queryClient = useQueryClient();
   const [creating, setCreating] = useState(false);
   const [showMembers, setShowMembers] = useState(false);
 
@@ -70,14 +68,6 @@ function OrganizationHomePageInner() {
       }),
   });
 
-  const create = useMutation({
-    mutationFn: (name: string) =>
-      apiPost<Workspace>(`/v1/organizations/${organization?.id}/workspaces`, { name }),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['workspaces', organization?.id] });
-      setCreating(false);
-    },
-  });
 
   if (organizations.isPending) {
     return (
@@ -120,25 +110,12 @@ function OrganizationHomePageInner() {
 
       {showMembers && organization && <MembersPanel orgId={organization.id} />}
 
-      {creating && (
-        <Card className="mt-6 p-5">
-          <h2 className="text-md font-medium text-primary">New workspace</h2>
-
-          {create.error instanceof ApiError && (
-            <Alert
-              tone={create.error.code === 'PLAN_LIMIT_EXCEEDED' ? 'warning' : 'danger'}
-              className="mt-3"
-            >
-              {create.error.message}
-            </Alert>
-          )}
-
-          <CreateWorkspaceForm
-            pending={create.isPending}
-            onCancel={() => setCreating(false)}
-            onSubmit={(name) => create.mutate(name)}
-          />
-        </Card>
+      {creating && organization && (
+        <WorkspaceWizard
+          orgId={organization.id}
+          orgSlug={orgSlug}
+          onClose={() => setCreating(false)}
+        />
       )}
 
       <div className="mt-6">
@@ -209,43 +186,5 @@ function WorkspaceGrid({ page, orgSlug }: { page: Page<Workspace>; orgSlug: stri
         </Card>
       ))}
     </ul>
-  );
-}
-
-function CreateWorkspaceForm({
-  pending,
-  onCancel,
-  onSubmit,
-}: {
-  pending: boolean;
-  onCancel: () => void;
-  onSubmit: (name: string) => void;
-}) {
-  const [name, setName] = useState('');
-
-  return (
-    <form
-      className="mt-4 space-y-4"
-      onSubmit={(event) => {
-        event.preventDefault();
-        if (name.trim()) onSubmit(name.trim());
-      }}
-    >
-      <Field
-        label="Workspace name"
-        required
-        autoFocus
-        value={name}
-        onChange={(event) => setName(event.target.value)}
-      />
-      <div className="flex gap-2">
-        <Button type="submit" variant="primary" loading={pending} disabled={!name.trim()}>
-          Create workspace
-        </Button>
-        <Button type="button" variant="ghost" onClick={onCancel} disabled={pending}>
-          Cancel
-        </Button>
-      </div>
-    </form>
   );
 }
