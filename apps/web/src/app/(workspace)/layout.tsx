@@ -2,6 +2,7 @@ import Link from 'next/link';
 
 import { ThemeToggle } from '@/components/theme';
 import { AdminLink } from '@/features/data/admin-link';
+import { UserMenu } from '@/features/data/user-menu';
 
 /**
  * The authenticated shell.
@@ -26,15 +27,10 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
             <span className="text-sm font-semibold tracking-tight">Tessera</span>
           </Link>
 
-          <nav aria-label="Account" className="flex items-center gap-3">
+          <nav aria-label="Account" className="flex items-center gap-2.5">
             <ThemeToggle />
             <AdminLink />
-            <Link
-              href="/app/settings"
-              className="text-sm text-secondary transition-colors duration-fast hover:text-primary"
-            >
-              Settings
-            </Link>
+            <UserMenu />
           </nav>
         </div>
       </header>

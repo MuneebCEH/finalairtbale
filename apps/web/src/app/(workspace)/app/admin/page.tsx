@@ -66,12 +66,20 @@ export default function AdminPage() {
   const error = updateUser.error;
 
   return (
-    <main id="main" className="mx-auto max-w-6xl px-6 py-10">
-      <header>
-        <h1 className="text-2xl font-semibold tracking-tight text-primary">Platform console</h1>
-        <p className="mt-1 text-sm text-secondary">
-          Every organization and account on this deployment — the operator&apos;s view.
-        </p>
+    <main id="main" className="mx-auto max-w-6xl px-6 py-8">
+      <header className="flex items-center gap-4 rounded-xl border border-line bg-gradient-to-r from-accent-subtle/60 to-transparent p-5">
+        <span
+          aria-hidden="true"
+          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-accent text-xl text-inverted shadow-sm"
+        >
+          ⛨
+        </span>
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-primary">Platform console</h1>
+          <p className="mt-0.5 text-sm text-secondary">
+            Every organization and account on this deployment — the operator&apos;s view.
+          </p>
+        </div>
       </header>
 
       {error instanceof ApiError && (
@@ -89,26 +97,31 @@ export default function AdminPage() {
       <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-5">
         {(
           [
-            ['Organizations', totals.organizations],
-            ['Users', totals.users],
-            ['Bases', totals.bases],
-            ['Tables', totals.tables],
-            ['Records', totals.records],
+            ['Organizations', totals.organizations, '🏢'],
+            ['Users', totals.users, '👥'],
+            ['Bases', totals.bases, '▦'],
+            ['Tables', totals.tables, '⊞'],
+            ['Records', totals.records, '≣'],
           ] as const
-        ).map(([label, value]) => (
-          <Card key={label} className="p-4">
-            <p className="text-2xl font-semibold tabular-nums text-primary">{value.toLocaleString()}</p>
-            <p className="mt-0.5 text-xs text-secondary">{label}</p>
+        ).map(([label, value, icon]) => (
+          <Card key={label} className="relative overflow-hidden p-4">
+            <span aria-hidden="true" className="absolute right-3 top-3 text-lg opacity-40">
+              {icon}
+            </span>
+            <p className="text-3xl font-semibold tabular-nums tracking-tight text-accent-text">
+              {value.toLocaleString()}
+            </p>
+            <p className="mt-1 text-xs font-medium uppercase tracking-wide text-tertiary">{label}</p>
           </Card>
         ))}
       </div>
 
       {/* Organizations */}
       <Card className="mt-6 overflow-x-auto p-0">
-        <h2 className="border-b border-line px-4 py-3 text-md font-medium text-primary">Organizations</h2>
+        <h2 className="flex items-center gap-2 border-b border-line bg-sunken/50 px-4 py-3 text-md font-semibold text-primary"><span aria-hidden="true">🏢</span>Organizations</h2>
         <table className="w-full text-left text-sm">
           <thead>
-            <tr className="border-b border-line text-xs text-tertiary">
+            <tr className="border-b border-line bg-sunken/30 text-2xs font-medium uppercase tracking-wide text-tertiary">
               <th className="px-4 py-2 font-medium">Name</th>
               <th className="px-4 py-2 font-medium">Plan</th>
               <th className="px-4 py-2 font-medium">Members</th>
@@ -118,7 +131,7 @@ export default function AdminPage() {
           </thead>
           <tbody>
             {overview.data!.organizations.map((org) => (
-              <tr key={org.id} className="border-b border-line last:border-0">
+              <tr key={org.id} className="border-b border-line transition-colors last:border-0 hover:bg-sunken/40">
                 <td className="px-4 py-2 text-primary">{org.name}</td>
                 <td className="px-4 py-2 text-secondary">{org.plan}</td>
                 <td className="px-4 py-2 tabular-nums text-secondary">{org.members}</td>
@@ -132,10 +145,10 @@ export default function AdminPage() {
 
       {/* Users */}
       <Card className="mt-6 overflow-x-auto p-0">
-        <h2 className="border-b border-line px-4 py-3 text-md font-medium text-primary">Users</h2>
+        <h2 className="flex items-center gap-2 border-b border-line bg-sunken/50 px-4 py-3 text-md font-semibold text-primary"><span aria-hidden="true">👥</span>Users</h2>
         <table className="w-full text-left text-sm">
           <thead>
-            <tr className="border-b border-line text-xs text-tertiary">
+            <tr className="border-b border-line bg-sunken/30 text-2xs font-medium uppercase tracking-wide text-tertiary">
               <th className="px-4 py-2 font-medium">Account</th>
               <th className="px-4 py-2 font-medium">Status</th>
               <th className="px-4 py-2 font-medium">Orgs</th>
@@ -145,7 +158,7 @@ export default function AdminPage() {
           </thead>
           <tbody>
             {users.data!.map((user) => (
-              <tr key={user.id} className="border-b border-line last:border-0">
+              <tr key={user.id} className="border-b border-line transition-colors last:border-0 hover:bg-sunken/40">
                 <td className="px-4 py-2">
                   <span className="block text-primary">
                     {user.name}

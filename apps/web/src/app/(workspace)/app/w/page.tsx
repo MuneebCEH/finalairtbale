@@ -65,12 +65,15 @@ function WorkspaceBasesPageInner() {
         </Link>
       </nav>
 
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-primary">Bases</h1>
-          <p className="mt-1 text-sm text-secondary">
-            A base holds related tables, and the views and automations built on them.
-          </p>
+      <header className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-gradient-to-r from-accent-subtle/60 to-transparent p-5">
+        <div className="flex items-center gap-4">
+          <span aria-hidden="true" className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-accent text-xl text-inverted shadow-sm">▦</span>
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight text-primary">Bases</h1>
+            <p className="mt-0.5 text-sm text-secondary">
+              A base holds related tables, and the views and automations built on them.
+            </p>
+          </div>
         </div>
         {!creating && !importing && (
           <div className="flex gap-2">

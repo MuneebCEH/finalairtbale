@@ -47,12 +47,15 @@ export default function OrganizationsPage() {
 
   return (
     <main id="main" className="mx-auto max-w-3xl px-6 py-10">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div>
+      <header className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-gradient-to-r from-accent-subtle/60 to-transparent p-5">
+        <div className="flex items-center gap-4">
+          <span aria-hidden="true" className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-accent text-xl text-inverted shadow-sm">🏢</span>
+          <div>
           <h1 className="text-2xl font-semibold tracking-tight text-primary">Organizations</h1>
           <p className="mt-1 text-sm text-secondary">
             Choose an organization to open, or create a new one.
           </p>
+          </div>
         </div>
         {!creating && (
           <Button variant="primary" onClick={() => setCreating(true)}>

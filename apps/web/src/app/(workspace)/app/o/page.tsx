@@ -99,14 +99,19 @@ function OrganizationHomePageInner() {
 
   return (
     <main id="main" className="mx-auto max-w-5xl px-6 py-10">
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-primary">
-            {organization?.name}
-          </h1>
-          <p className="mt-1 text-sm text-secondary">
-            Workspaces group related bases and the people who work on them.
-          </p>
+      <header className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-gradient-to-r from-accent-subtle/60 to-transparent p-5">
+        <div className="flex items-center gap-4">
+          <span aria-hidden="true" className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-accent text-xl font-semibold text-inverted shadow-sm">
+            {(organization?.name ?? '?').slice(0, 1).toUpperCase()}
+          </span>
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight text-primary">
+              {organization?.name}
+            </h1>
+            <p className="mt-0.5 text-sm text-secondary">
+              Workspaces group related bases and the people who work on them.
+            </p>
+          </div>
         </div>
         {!creating && (
           <div className="flex gap-2">
