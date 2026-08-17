@@ -393,6 +393,37 @@ export function GridView({
     rowHeight: ROW_HEIGHT,
   });
 
+  /**
+   * Per-column totals for the summary bar. Only columns whose type is genuinely additive get a
+   * Sum — a text column with digit-looking values must not pretend to be money. Currency keeps
+   * two decimals with a $; plain numbers show as entered.
+   */
+  const summaries = useMemo(() => {
+    const NUMERIC = new Set(['number', 'decimal', 'currency', 'percent', 'duration', 'rating']);
+    const out: Record<string, string> = {};
+    for (const field of fields) {
+      if (!NUMERIC.has(field.type)) continue;
+      let sum = 0;
+      let any = false;
+      for (const record of records) {
+        const value = record.fields[field.id];
+        const n = typeof value === 'number' ? value : typeof value === 'string' && value.trim() !== '' ? Number(value) : NaN;
+        if (!Number.isNaN(n)) {
+          sum += n;
+          any = true;
+        }
+      }
+      if (!any) continue;
+      out[field.id] =
+        field.type === 'currency'
+          ? `$${sum.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+          : field.type === 'percent'
+            ? `${sum.toLocaleString(undefined, { maximumFractionDigits: 2 })}%`
+            : sum.toLocaleString(undefined, { maximumFractionDigits: 2 });
+    }
+    return out;
+  }, [fields, records]);
+
   const widthOf = useCallback(
     (field: Field) => widths[field.id] ?? DEFAULT_COLUMN_WIDTH,
     [widths],
@@ -850,6 +881,39 @@ export function GridView({
               {addRecord.isPending ? 'Adding…' : 'Add record'}
             </span>
           </button>
+
+          {/* Airtable's summary bar: the record count at the left, and under every numeric
+              column its Sum — pinned to the bottom of the scroll area, sliding sideways with
+              the columns so each total stays under the column it belongs to. */}
+          <div
+            role="row"
+            aria-label="Column summaries"
+            className="sticky bottom-0 z-20 flex border-t border-line-strong bg-surface"
+            style={{ height: ROW_HEIGHT, width: totalWidth }}
+          >
+            <div
+              className="sticky left-0 z-30 flex shrink-0 items-center border-r border-line bg-surface"
+              style={{ width: ROW_NUMBER_WIDTH }}
+            >
+              <span className="absolute left-2 whitespace-nowrap text-xs font-medium text-secondary">
+                {records.length} record{records.length === 1 ? '' : 's'}
+              </span>
+            </div>
+            {fields.map((field) => (
+              <div
+                key={field.id}
+                className="flex shrink-0 items-center justify-end overflow-hidden border-r border-line px-2"
+                style={{ width: widthOf(field) }}
+              >
+                {summaries[field.id] !== undefined && (
+                  <span className="truncate text-xs tabular-nums text-secondary" title={`Sum of ${field.name}`}>
+                    <span className="mr-1 text-2xs uppercase text-tertiary">Sum</span>
+                    {summaries[field.id]}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       </div>
       </div>
