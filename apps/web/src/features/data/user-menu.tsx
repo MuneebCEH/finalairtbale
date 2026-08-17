@@ -39,16 +39,16 @@ export function UserMenu() {
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-label="Account menu"
-        className="flex items-center gap-2 rounded-full py-1 pl-1 pr-2 hover:bg-sunken"
+        className="flex items-center gap-2 rounded-full py-1 pl-1 pr-2 transition hover:bg-white/10"
       >
         <span
           aria-hidden="true"
-          className="flex h-7 w-7 items-center justify-center rounded-full bg-accent text-xs font-semibold text-inverted"
+          className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-teal-400 to-cyan-500 text-xs font-bold text-slate-900 ring-2 ring-white/30"
         >
           {initial}
         </span>
-        <span className="hidden max-w-[10rem] truncate text-sm text-primary sm:block">{me.data.name}</span>
-        <span aria-hidden="true" className="text-xs text-tertiary">▾</span>
+        <span className="hidden max-w-[10rem] truncate text-sm font-medium text-white sm:block">{me.data.name}</span>
+        <span aria-hidden="true" className="text-xs text-white/60">▾</span>
       </button>
 
       {open && (

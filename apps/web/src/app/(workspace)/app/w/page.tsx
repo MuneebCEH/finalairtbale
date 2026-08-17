@@ -8,6 +8,7 @@ import { Suspense, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Alert, Card, EmptyState, ErrorState, LoadingState } from '@/components/ui/feedback';
 import { Field } from '@/components/ui/field';
+import { HeroButton, PageHero } from '@/components/ui/page-hero';
 import { dataApi } from '@/features/data/api';
 import { ImportSpreadsheetCard } from '@/features/data/import-spreadsheet-card';
 import { ApiError } from '@/lib/api-client';
@@ -65,36 +66,32 @@ function WorkspaceBasesPageInner() {
         </Link>
       </nav>
 
-      <header className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-gradient-to-r from-accent-subtle/60 to-transparent p-5">
-        <div className="flex items-center gap-4">
-          <span aria-hidden="true" className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-accent text-xl text-inverted shadow-sm">▦</span>
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-primary">Bases</h1>
-            <p className="mt-0.5 text-sm text-secondary">
-              A base holds related tables, and the views and automations built on them.
-            </p>
-          </div>
-        </div>
-        {!creating && !importing && (
-          <div className="flex gap-2">
-            <Button variant="ghost" onClick={() => setShowTemplates((v) => !v)}>
-              {showTemplates ? 'Hide templates' : 'Use a template'}
-            </Button>
-            <Button
-              variant="ghost"
-              onClick={() => {
-                setImporting(true);
-                setShowTemplates(false);
-              }}
-            >
-              Import Excel
-            </Button>
-            <Button variant="primary" onClick={() => setCreating(true)}>
-              New base
-            </Button>
-          </div>
-        )}
-      </header>
+      <PageHero
+        icon="▦"
+        title="Bases"
+        subtitle="A base holds related tables, and the views and automations built on them."
+        actions={
+          !creating &&
+          !importing && (
+            <>
+              <HeroButton onClick={() => setShowTemplates((v) => !v)}>
+                {showTemplates ? 'Hide templates' : '✨ Templates'}
+              </HeroButton>
+              <HeroButton
+                onClick={() => {
+                  setImporting(true);
+                  setShowTemplates(false);
+                }}
+              >
+                ⇪ Import Excel
+              </HeroButton>
+              <HeroButton primary onClick={() => setCreating(true)}>
+                + New base
+              </HeroButton>
+            </>
+          )
+        }
+      />
 
       {importing && (
         <ImportSpreadsheetCard

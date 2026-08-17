@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Alert, Card, LoadingState } from '@/components/ui/feedback';
+import { PageHero } from '@/components/ui/page-hero';
 import { dataApi } from '@/features/data/api';
 import { ApiError, apiPatch, apiPost } from '@/lib/api-client';
 
@@ -57,18 +58,11 @@ export default function SettingsPage() {
 
   return (
     <main id="main" className="mx-auto max-w-3xl px-6 py-8">
-      <header className="flex items-center gap-4 rounded-xl border border-line bg-gradient-to-r from-accent-subtle/60 to-transparent p-5">
-        <span
-          aria-hidden="true"
-          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-accent text-xl font-semibold text-inverted shadow-sm"
-        >
-          {(me.data?.name || '?').slice(0, 1).toUpperCase()}
-        </span>
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-primary">Settings</h1>
-          <p className="mt-0.5 text-sm text-secondary">{me.data?.email}</p>
-        </div>
-      </header>
+      <PageHero
+        icon={(me.data?.name || '?').slice(0, 1).toUpperCase()}
+        title="Settings"
+        subtitle={me.data?.email}
+      />
 
       {error instanceof ApiError && (
         <Alert tone="danger" className="mt-4">

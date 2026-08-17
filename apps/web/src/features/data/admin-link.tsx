@@ -23,9 +23,9 @@ export function AdminLink() {
   return (
     <Link
       href="/app/admin"
-      className="text-sm text-secondary transition-colors duration-fast hover:text-primary"
+      className="rounded-md border border-white/20 bg-white/10 px-2.5 py-1 text-xs font-medium text-white backdrop-blur transition hover:bg-white/20"
     >
-      Admin
+      ⛨ Admin
     </Link>
   );
 }

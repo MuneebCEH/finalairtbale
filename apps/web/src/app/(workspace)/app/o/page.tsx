@@ -9,6 +9,7 @@ import { Suspense, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Alert, Card, EmptyState, ErrorState, LoadingState } from '@/components/ui/feedback';
 import { Field } from '@/components/ui/field';
+import { HeroButton, PageHero } from '@/components/ui/page-hero';
 import { MembersPanel } from '@/features/data/members-panel';
 import { ApiError, apiGet, apiList, apiPost } from '@/lib/api-client';
 
@@ -99,31 +100,23 @@ function OrganizationHomePageInner() {
 
   return (
     <main id="main" className="mx-auto max-w-5xl px-6 py-10">
-      <header className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-gradient-to-r from-accent-subtle/60 to-transparent p-5">
-        <div className="flex items-center gap-4">
-          <span aria-hidden="true" className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-accent text-xl font-semibold text-inverted shadow-sm">
-            {(organization?.name ?? '?').slice(0, 1).toUpperCase()}
-          </span>
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-primary">
-              {organization?.name}
-            </h1>
-            <p className="mt-0.5 text-sm text-secondary">
-              Workspaces group related bases and the people who work on them.
-            </p>
-          </div>
-        </div>
-        {!creating && (
-          <div className="flex gap-2">
-            <Button variant="ghost" onClick={() => setShowMembers((v) => !v)}>
-              {showMembers ? 'Hide members' : 'Members'}
-            </Button>
-            <Button variant="primary" onClick={() => setCreating(true)}>
-              New workspace
-            </Button>
-          </div>
-        )}
-      </header>
+      <PageHero
+        icon={(organization?.name ?? '?').slice(0, 1).toUpperCase()}
+        title={organization?.name}
+        subtitle="Workspaces group related bases and the people who work on them."
+        actions={
+          !creating && (
+            <>
+              <HeroButton onClick={() => setShowMembers((v) => !v)}>
+                👥 {showMembers ? 'Hide members' : 'Members'}
+              </HeroButton>
+              <HeroButton primary onClick={() => setCreating(true)}>
+                + New workspace
+              </HeroButton>
+            </>
+          )
+        }
+      />
 
       {showMembers && organization && <MembersPanel orgId={organization.id} />}
 

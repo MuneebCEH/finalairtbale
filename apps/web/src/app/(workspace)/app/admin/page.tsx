@@ -5,6 +5,7 @@ import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Alert, Card, EmptyState, LoadingState } from '@/components/ui/feedback';
+import { PageHero } from '@/components/ui/page-hero';
 import { dataApi } from '@/features/data/api';
 import { ApiError } from '@/lib/api-client';
 import { cn } from '@/lib/cn';
@@ -67,20 +68,11 @@ export default function AdminPage() {
 
   return (
     <main id="main" className="mx-auto max-w-6xl px-6 py-8">
-      <header className="flex items-center gap-4 rounded-xl border border-line bg-gradient-to-r from-accent-subtle/60 to-transparent p-5">
-        <span
-          aria-hidden="true"
-          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-accent text-xl text-inverted shadow-sm"
-        >
-          ⛨
-        </span>
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-primary">Platform console</h1>
-          <p className="mt-0.5 text-sm text-secondary">
-            Every organization and account on this deployment — the operator&apos;s view.
-          </p>
-        </div>
-      </header>
+      <PageHero
+        icon="⛨"
+        title="Platform console"
+        subtitle="Every organization and account on this deployment — the operator's view."
+      />
 
       {error instanceof ApiError && (
         <Alert tone="danger" className="mt-4">
@@ -97,22 +89,26 @@ export default function AdminPage() {
       <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-5">
         {(
           [
-            ['Organizations', totals.organizations, '🏢'],
-            ['Users', totals.users, '👥'],
-            ['Bases', totals.bases, '▦'],
-            ['Tables', totals.tables, '⊞'],
-            ['Records', totals.records, '≣'],
+            ['Organizations', totals.organizations, '🏢', 'from-teal-600 to-cyan-600'],
+            ['Users', totals.users, '👥', 'from-indigo-600 to-blue-600'],
+            ['Bases', totals.bases, '▦', 'from-violet-600 to-purple-600'],
+            ['Tables', totals.tables, '⊞', 'from-amber-500 to-orange-600'],
+            ['Records', totals.records, '≣', 'from-rose-500 to-pink-600'],
           ] as const
-        ).map(([label, value, icon]) => (
-          <Card key={label} className="relative overflow-hidden p-4">
-            <span aria-hidden="true" className="absolute right-3 top-3 text-lg opacity-40">
+        ).map(([label, value, icon, grad]) => (
+          <div
+            key={label}
+            className={cn(
+              'relative overflow-hidden rounded-2xl bg-gradient-to-br p-4 text-white shadow-md',
+              grad,
+            )}
+          >
+            <span aria-hidden="true" className="absolute right-3 top-3 text-xl opacity-50">
               {icon}
             </span>
-            <p className="text-3xl font-semibold tabular-nums tracking-tight text-accent-text">
-              {value.toLocaleString()}
-            </p>
-            <p className="mt-1 text-xs font-medium uppercase tracking-wide text-tertiary">{label}</p>
-          </Card>
+            <p className="text-3xl font-bold tabular-nums tracking-tight">{value.toLocaleString()}</p>
+            <p className="mt-1 text-xs font-medium uppercase tracking-wide text-white/80">{label}</p>
+          </div>
         ))}
       </div>
 
