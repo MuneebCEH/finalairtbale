@@ -1,6 +1,7 @@
 import Link from 'next/link';
 
 import { ThemeToggle } from '@/components/theme';
+import { AdminLink } from '@/features/data/admin-link';
 
 /**
  * The authenticated shell.
@@ -27,6 +28,7 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
 
           <nav aria-label="Account" className="flex items-center gap-3">
             <ThemeToggle />
+            <AdminLink />
             <Link
               href="/app/settings"
               className="text-sm text-secondary transition-colors duration-fast hover:text-primary"

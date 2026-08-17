@@ -35,7 +35,7 @@ class AutomationController extends Controller
     /** POST /v1/bases/{baseId}/automations */
     public function create(Request $request, string $baseId)
     {
-        $tenant = $this->authorizeAction($request, 'table:update');
+        $tenant = $this->authorizeAction($request, 'automation:manage');
         $base = $request->attributes->get('resolved_base') ?? abort(404);
         $data = $this->validated($request);
 
@@ -63,7 +63,7 @@ class AutomationController extends Controller
     /** PATCH /v1/automations/{automationId} */
     public function update(Request $request, string $automationId)
     {
-        $this->authorizeAction($request, 'table:update');
+        $this->authorizeAction($request, 'automation:manage');
         /** @var Automation $automation */
         $automation = $request->attributes->get('resolved_automation') ?? abort(404);
         $data = $this->validated($request, updating: true);
@@ -99,7 +99,7 @@ class AutomationController extends Controller
     /** DELETE /v1/automations/{automationId} */
     public function delete(Request $request, string $automationId)
     {
-        $this->authorizeAction($request, 'table:update');
+        $this->authorizeAction($request, 'automation:manage');
         ($request->attributes->get('resolved_automation') ?? abort(404))->delete();
 
         return response()->noContent();
@@ -111,7 +111,7 @@ class AutomationController extends Controller
      */
     public function test(Request $request, string $automationId)
     {
-        $this->authorizeAction($request, 'table:update');
+        $this->authorizeAction($request, 'automation:manage');
         /** @var Automation $automation */
         $automation = $request->attributes->get('resolved_automation') ?? abort(404);
 

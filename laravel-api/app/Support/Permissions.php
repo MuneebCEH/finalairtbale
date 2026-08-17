@@ -11,33 +11,45 @@ use App\Exceptions\ApiException;
  */
 final class Permissions
 {
+    /**
+     * The role ladder, Airtable-shaped: viewer (read-only) < editor (records but not schema)
+     * < admin (schema, automations, members) < owner (everything). `member` is the legacy seed
+     * value and keeps its historical meaning — records yes, schema changes no — so existing
+     * memberships keep working exactly as their name implied.
+     */
     private const ORG_ROLE_RANK = [
         'guest' => 0,
-        'member' => 1,
-        'billing_admin' => 2,
-        'security_admin' => 3,
-        'admin' => 4,
-        'owner' => 5,
+        'viewer' => 1,
+        'member' => 2,
+        'editor' => 2,
+        'billing_admin' => 3,
+        'security_admin' => 4,
+        'admin' => 5,
+        'owner' => 6,
     ];
 
     /** action => minimum org role required */
     private const ACTION_MIN_ROLE = [
         'organization:read' => 'guest',
-        'member:read' => 'member',
+        'member:read' => 'viewer',
         'workspace:list' => 'guest',
         'workspace:read' => 'guest',
-        'workspace:create' => 'member',
+        'workspace:create' => 'admin',
         'organization:update' => 'admin',
         'organization:manage_settings' => 'admin',
         'member:manage' => 'admin',
 
-        // Data plane. Reads for any member; writes for member+ (guests are read-only). NOTE:
-        // finer workspace-role gating (a workspace 'viewer' being read-only even though they are an
-        // org 'member') is the next Phase 4 refinement.
-        'base:read' => 'guest', 'base:create' => 'member', 'base:update' => 'member', 'base:delete' => 'member',
-        'table:read' => 'guest', 'table:create' => 'member', 'table:update' => 'member', 'table:delete' => 'member',
-        'field:read' => 'guest', 'field:create' => 'member', 'field:update' => 'member', 'field:delete' => 'member',
-        'record:read' => 'guest', 'record:create' => 'member', 'record:update' => 'member', 'record:delete' => 'member',
+        // Data plane. Reads for everyone in the org; record writes for editors; anything that
+        // changes STRUCTURE (bases, tables, fields, automations) needs admin — an editor
+        // deleting a column is how a team loses a column.
+        'base:read' => 'guest', 'base:create' => 'admin', 'base:update' => 'admin', 'base:delete' => 'admin',
+        'table:read' => 'guest', 'table:create' => 'admin', 'table:update' => 'admin', 'table:delete' => 'admin',
+        'field:read' => 'guest', 'field:create' => 'admin', 'field:update' => 'admin', 'field:delete' => 'admin',
+        'record:read' => 'guest', 'record:create' => 'editor', 'record:update' => 'editor', 'record:delete' => 'editor',
+
+        // Views are working-surface, not structure: an editor saving a filter is normal work.
+        'view:read' => 'guest', 'view:update' => 'editor',
+        'automation:manage' => 'admin',
     ];
 
     public static function can(TenantContext $tenant, string $action): bool

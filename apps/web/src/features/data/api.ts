@@ -108,6 +108,50 @@ export interface LinkedRef {
   label: string;
 }
 
+/** The signed-in account, as /v1/me returns it. */
+export interface MeUser {
+  id: string;
+  email: string;
+  name: string;
+  isSuperAdmin?: boolean;
+}
+
+/** One organization member, as the Members panel lists them. */
+export interface MemberDto {
+  id: string;
+  userId: string;
+  email: string;
+  name: string;
+  role: string;
+  status: string;
+  joinedAt?: string;
+}
+
+export interface AdminOverview {
+  totals: { organizations: number; users: number; bases: number; tables: number; records: number };
+  organizations: {
+    id: string;
+    name: string;
+    slug: string;
+    plan: string;
+    status: string;
+    members: number;
+    bases: number;
+    records: number;
+    createdAt?: string;
+  }[];
+}
+
+export interface AdminUser {
+  id: string;
+  email: string;
+  name: string;
+  status: string;
+  isSuperAdmin: boolean;
+  organizations: number;
+  lastLoginAt?: string | null;
+}
+
 /** One automation: a trigger on a table plus the steps it runs. */
 export interface AutomationDto {
   id: string;
@@ -283,6 +327,35 @@ export const dataApi = {
   /** Runs the steps once against the table's newest record, ignoring the trigger. */
   testAutomation: (automationId: string) =>
     apiPost<{ ranAgainst: string; automation: AutomationDto }>(`/v1/automations/${automationId}/test`, {}),
+
+  // ── Account, members, platform console ───────────────────────────────────
+
+  me: () => apiGet<MeUser>('/v1/me'),
+
+  listMembers: (orgId: string) => apiGet<MemberDto[]>(`/v1/organizations/${orgId}/members`),
+
+  /** Adds a member; when the email is new, creates the account with the given password. */
+  createMember: (orgId: string, input: { name: string; email: string; password?: string; role: string }) =>
+    apiPost<{ userId: string; email: string; name: string; role: string }>(
+      `/v1/organizations/${orgId}/members`,
+      input,
+    ),
+
+  updateMemberRole: (orgId: string, userId: string, role: string) =>
+    apiPatch<{ userId: string; role: string }>(`/v1/organizations/${orgId}/members/${userId}`, { role }),
+
+  removeMember: (orgId: string, userId: string) =>
+    apiDelete(`/v1/organizations/${orgId}/members/${userId}`),
+
+  adminOverview: () => apiGet<AdminOverview>('/v1/admin/overview'),
+
+  adminUsers: () => apiGet<AdminUser[]>('/v1/admin/users'),
+
+  adminUpdateUser: (
+    userId: string,
+    input: { status?: 'active' | 'suspended'; password?: string; isSuperAdmin?: boolean },
+  ) =>
+    apiPatch<{ id: string; status: string; isSuperAdmin: boolean }>(`/v1/admin/users/${userId}`, input),
 
   listFields: (tableId: string) => apiGet<Field[]>(`/v1/tables/${tableId}/fields`),
 

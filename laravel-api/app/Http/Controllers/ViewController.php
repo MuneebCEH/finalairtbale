@@ -34,7 +34,7 @@ class ViewController extends Controller
     /** POST /v1/tables/{tableId}/views */
     public function create(Request $request, string $tableId)
     {
-        $tenant = $this->authorizeAction($request, 'table:update');
+        $tenant = $this->authorizeAction($request, 'view:update');
         $table = $this->table($request);
 
         $data = $request->validate([
@@ -59,7 +59,7 @@ class ViewController extends Controller
     /** PATCH /v1/views/{viewId} */
     public function update(Request $request, string $viewId)
     {
-        $this->authorizeAction($request, 'table:update');
+        $this->authorizeAction($request, 'view:update');
         $view = $this->view($request);
 
         $data = $request->validate([
@@ -77,7 +77,7 @@ class ViewController extends Controller
     /** DELETE /v1/views/{viewId} */
     public function delete(Request $request, string $viewId)
     {
-        $this->authorizeAction($request, 'table:update');
+        $this->authorizeAction($request, 'view:update');
         $this->view($request)->delete();
 
         return response()->noContent();

@@ -66,6 +66,9 @@ class User extends Model
             'avatarUrl' => $this->avatar_url,
             'emailVerified' => $this->email_verified_at !== null,
             'twoFactorEnabled' => (bool) $this->two_factor_enabled,
+            // Additive to the NestJS contract: existing readers ignore it; the web app uses it
+            // to decide whether the platform console link exists at all.
+            'isSuperAdmin' => (bool) $this->is_super_admin,
             'timezone' => $this->timezone,
             'locale' => $this->locale,
             'theme' => $this->theme,

@@ -9,6 +9,7 @@ import { Suspense, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Alert, Card, EmptyState, ErrorState, LoadingState } from '@/components/ui/feedback';
 import { Field } from '@/components/ui/field';
+import { MembersPanel } from '@/features/data/members-panel';
 import { ApiError, apiGet, apiList, apiPost } from '@/lib/api-client';
 
 interface OrganizationSummary {
@@ -50,6 +51,7 @@ function OrganizationHomePageInner() {
   const orgSlug = searchParams.get('org') ?? '';
   const queryClient = useQueryClient();
   const [creating, setCreating] = useState(false);
+  const [showMembers, setShowMembers] = useState(false);
 
   const organizations = useQuery({
     queryKey: ['organizations'],
@@ -107,11 +109,18 @@ function OrganizationHomePageInner() {
           </p>
         </div>
         {!creating && (
-          <Button variant="primary" onClick={() => setCreating(true)}>
-            New workspace
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="ghost" onClick={() => setShowMembers((v) => !v)}>
+              {showMembers ? 'Hide members' : 'Members'}
+            </Button>
+            <Button variant="primary" onClick={() => setCreating(true)}>
+              New workspace
+            </Button>
+          </div>
         )}
       </header>
+
+      {showMembers && organization && <MembersPanel orgId={organization.id} />}
 
       {creating && (
         <Card className="mt-6 p-5">

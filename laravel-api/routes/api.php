@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AdminController;
 use App\Http\Controllers\AttachmentController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\AutomationController;
@@ -64,6 +65,11 @@ Route::prefix('v1')->group(function () {
         Route::patch('me', [MeController::class, 'update']);
         Route::get('me/organizations', [MeController::class, 'organizations']);
         Route::get('templates', [TemplateController::class, 'index']);
+
+        // ── Platform console (super admins only; controller 404s everyone else) ──
+        Route::get('admin/overview', [AdminController::class, 'overview']);
+        Route::get('admin/users', [AdminController::class, 'users']);
+        Route::patch('admin/users/{userId}', [AdminController::class, 'updateUser']);
     });
 
     // Organizations & workspaces. Creating an org needs no tenant (it makes one); everything else
@@ -74,6 +80,9 @@ Route::prefix('v1')->group(function () {
         Route::middleware('tenant')->group(function () {
             Route::get('organizations/{orgId}', [OrganizationController::class, 'show']);
             Route::get('organizations/{orgId}/members', [OrganizationController::class, 'listMembers']);
+            Route::post('organizations/{orgId}/members', [OrganizationController::class, 'createMember']);
+            Route::patch('organizations/{orgId}/members/{userId}', [OrganizationController::class, 'updateMember']);
+            Route::delete('organizations/{orgId}/members/{userId}', [OrganizationController::class, 'removeMember']);
             Route::get('organizations/{orgId}/workspaces', [WorkspaceController::class, 'list']);
             Route::post('organizations/{orgId}/workspaces', [WorkspaceController::class, 'create']);
             Route::get('workspaces/{workspaceId}', [WorkspaceController::class, 'show']);
