@@ -1,6 +1,7 @@
 'use client';
 
 import { memo, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 import { cn } from '@/lib/cn';
 
@@ -367,6 +368,8 @@ function AttachmentCell({
   const [previewing, setPreviewing] = useState<number | null>(null);
   /** Airtable's "Expand cell" — all of the cell's files as large cards. */
   const [galleryOpen, setGalleryOpen] = useState(false);
+  /** The hovered file's dark tooltip (filename · type · size), positioned near the card. */
+  const [hovered, setHovered] = useState<{ name: string; mime: string; size: number; x: number; y: number } | null>(null);
 
   const upload = async (chosen: FileList | null): Promise<void> => {
     if (!chosen || chosen.length === 0) return;
@@ -437,6 +440,8 @@ function AttachmentCell({
           );
         }
 
+        const isDoc = !isImage && !file.mimeType?.startsWith('audio/') && !file.mimeType?.startsWith('video/');
+
         return (
           <button
             key={file.id}
@@ -447,10 +452,20 @@ function AttachmentCell({
             }}
             onMouseDown={(event) => event.stopPropagation()}
             onDoubleClick={(event) => event.stopPropagation()}
+            onMouseEnter={(event) => {
+              const rect = event.currentTarget.getBoundingClientRect();
+              setHovered({
+                name: file.filename,
+                mime: file.mimeType ?? '',
+                size: file.size,
+                x: Math.min(rect.left, window.innerWidth - 280),
+                y: rect.bottom + 6,
+              });
+            }}
+            onMouseLeave={() => setHovered(null)}
             aria-label={`Preview ${file.filename}`}
-            title={`${file.filename} — ${formatBytes(file.size)}`}
             className={cn(
-              'flex shrink-0 items-center justify-center overflow-hidden rounded-sm border border-line bg-surface',
+              'flex shrink-0 items-center justify-center overflow-hidden rounded-sm border border-line bg-white',
               'hover:ring-2 hover:ring-accent',
               wrap ? 'h-14 w-11' : 'h-6 w-5',
             )}
@@ -465,6 +480,14 @@ function AttachmentCell({
                 className="h-full w-full object-cover"
                 loading="lazy"
               />
+            ) : isDoc ? (
+              // A miniature "page": faint text lines, the way Airtable's document thumbnails read
+              // at this size — honest about being a document without fetching the whole file.
+              <span aria-hidden="true" className={cn('flex w-full flex-col bg-white', wrap ? 'gap-1 p-1.5 pt-2' : 'gap-[2px] p-[3px] pt-1')}>
+                {[86, 70, 92, 60].slice(0, wrap ? 4 : 3).map((width, i) => (
+                  <span key={i} className="block h-[2px] rounded-full bg-slate-300" style={{ width: `${width}%` }} />
+                ))}
+              </span>
             ) : (
               <span aria-hidden="true" className={cn('text-tertiary', wrap ? 'text-lg' : 'text-2xs')}>
                 {fileGlyph(file.mimeType)}
@@ -473,6 +496,24 @@ function AttachmentCell({
           </button>
         );
       })}
+
+      {/* Airtable's dark hover card: name, kind, size — portalled so the cell cannot clip it. */}
+      {hovered &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            role="tooltip"
+            style={{ left: hovered.x, top: hovered.y }}
+            className="pointer-events-none fixed z-[70] max-w-[17rem] rounded-md bg-slate-900 px-3 py-2 text-white shadow-lg"
+          >
+            <p className="break-words text-xs font-medium leading-snug">{hovered.name}</p>
+            <p className="mt-1 flex justify-between gap-4 text-2xs uppercase tracking-wide text-white/60">
+              <span>{fileKind(hovered.mime, hovered.name)}</span>
+              <span>{formatBytes(hovered.size)}</span>
+            </p>
+          </div>,
+          document.body,
+        )}
       {!wrap && files.length > 6 && (
         <span className="shrink-0 text-2xs text-tertiary">+{files.length - 6}</span>
       )}
@@ -545,6 +586,16 @@ function AttachmentCell({
       )}
     </span>
   );
+}
+
+/** The tooltip's kind label — "PDF", "IMAGE", "AUDIO" — from mime, falling back to extension. */
+function fileKind(mimeType: string, filename: string): string {
+  if (mimeType === 'application/pdf') return 'PDF';
+  if (mimeType.startsWith('image/')) return mimeType.slice(6).toUpperCase();
+  if (mimeType.startsWith('audio/')) return 'AUDIO';
+  if (mimeType.startsWith('video/')) return 'VIDEO';
+  const ext = filename.split('.').pop();
+  return ext && ext.length <= 5 ? ext.toUpperCase() : 'FILE';
 }
 
 function fileGlyph(mimeType: string): string {
