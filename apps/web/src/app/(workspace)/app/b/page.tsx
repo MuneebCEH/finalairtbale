@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Alert, ErrorState, LoadingState } from '@/components/ui/feedback';
 import { BaseTabs, type BaseSection } from '@/features/base/base-tabs';
 import { AutomationsSection, FormsSection, InterfacesSection } from '@/features/base/sections';
-import { TableMenu } from '@/features/base/table-menu';
+import { TableMenu, TableTrashButton } from '@/features/base/table-menu';
 import { dataApi } from '@/features/data/api';
 import { GridView } from '@/features/grid/grid-view';
 import { ApiError } from '@/lib/api-client';
@@ -207,7 +207,8 @@ function BasePageInner() {
           +
         </Button>
 
-        <div className="ml-auto shrink-0 pb-1">
+        <div className="ml-auto flex shrink-0 items-center gap-1 pb-1">
+          <TableTrashButton baseId={baseId} />
           <Button size="sm" variant="secondary" onClick={() => setAddingField((v) => !v)}>
             Add field
           </Button>

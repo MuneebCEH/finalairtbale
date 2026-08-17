@@ -351,6 +351,35 @@ export const dataApi = {
 
   adminUsers: () => apiGet<AdminUser[]>('/v1/admin/users'),
 
+  // ── Trash & history ───────────────────────────────────────────────────────
+
+  listRecordTrash: (tableId: string) =>
+    apiGet<{ id: string; autoNumber: number; label: string; deletedAt: string | null }[]>(
+      `/v1/tables/${tableId}/trash`,
+    ),
+
+  restoreRecords: (tableId: string, recordIds: string[]) =>
+    apiPost<{ restored: number }>(`/v1/tables/${tableId}/records/restore`, { recordIds }),
+
+  listTableTrash: (baseId: string) =>
+    apiGet<{ id: string; name: string; recordCount: number; deletedAt: string | null }[]>(
+      `/v1/bases/${baseId}/trash`,
+    ),
+
+  restoreTable: (baseId: string, tableId: string) =>
+    apiPost<{ id: string; name: string }>(`/v1/bases/${baseId}/trash/tables/${tableId}/restore`, {}),
+
+  listRevisions: (recordId: string) =>
+    apiGet<
+      {
+        id: string;
+        kind: 'created' | 'updated' | 'restored';
+        userName: string;
+        changes: { field: string; from: unknown; to: unknown }[];
+        createdAt: string | null;
+      }[]
+    >(`/v1/records/${recordId}/revisions`),
+
   adminUpdateUser: (
     userId: string,
     input: { status?: 'active' | 'suspended'; password?: string; isSuperAdmin?: boolean },

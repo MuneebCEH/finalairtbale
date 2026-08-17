@@ -15,7 +15,9 @@ use App\Http\Controllers\MeController;
 use App\Http\Controllers\OrganizationController;
 use App\Http\Controllers\PublicFormController;
 use App\Http\Controllers\RecordController;
+use App\Http\Controllers\RevisionController;
 use App\Http\Controllers\SectionsController;
+use App\Http\Controllers\TrashController;
 use App\Http\Controllers\TemplateController;
 use App\Http\Controllers\WorkspaceController;
 use Illuminate\Support\Facades\Route;
@@ -124,6 +126,13 @@ Route::prefix('v1')->group(function () {
             Route::delete('tables/{tableId}/records', [RecordController::class, 'bulkDelete']);
 
             // Comments, attachments, and the (currently empty) forms/automations sections.
+            // ── Trash & history ─────────────────────────────────────────────
+            Route::get('tables/{tableId}/trash', [TrashController::class, 'records']);
+            Route::post('tables/{tableId}/records/restore', [TrashController::class, 'restoreRecords']);
+            Route::get('bases/{baseId}/trash', [TrashController::class, 'tables']);
+            Route::post('bases/{baseId}/trash/tables/{trashedTableId}/restore', [TrashController::class, 'restoreTable']);
+            Route::get('records/{recordId}/revisions', [RevisionController::class, 'list']);
+
             Route::get('records/{recordId}/comments', [CommentController::class, 'list']);
             Route::post('records/{recordId}/comments', [CommentController::class, 'create']);
             Route::post('bases/{baseId}/attachments', [AttachmentController::class, 'upload']);

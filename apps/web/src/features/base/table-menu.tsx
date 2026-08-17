@@ -1,6 +1,6 @@
 'use client';
 
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
@@ -29,7 +29,7 @@ export function TableMenu({
   onClose: () => void;
 }) {
   const queryClient = useQueryClient();
-  const [mode, setMode] = useState<'menu' | 'rename' | 'import'>('menu');
+  const [mode, setMode] = useState<'menu' | 'rename' | 'import' | 'trash'>('menu');
   const [name, setName] = useState(tableName);
 
   const refresh = async () => {
@@ -144,9 +144,18 @@ export function TableMenu({
             }}
             onBack={() => setMode('menu')}
           />
+        ) : mode === 'trash' ? (
+          <RecordTrash
+            tableId={tableId}
+            onRestored={async () => {
+              await queryClient.invalidateQueries({ queryKey: ['records', tableId] });
+            }}
+            onBack={() => setMode('menu')}
+          />
         ) : (
           <>
             <MenuItem icon="⇪" label="Import data" hint="CSV, Excel or pasted rows" onClick={() => setMode('import')} />
+            <MenuItem icon="🗂" label="Trash" hint="Deleted records — restore them" onClick={() => setMode('trash')} />
             <MenuItem icon="✎" label="Rename table" onClick={() => setMode('rename')} />
             <MenuItem
               icon="⧉"
@@ -214,6 +223,136 @@ function MenuItem({
         {hint && <span className="block text-xs text-tertiary">{hint}</span>}
       </span>
     </button>
+  );
+}
+
+/**
+ * Deleted TABLES of the base, with restore — lives beside "Add field" so a vanished tab has an
+ * obvious way home. Renders nothing until opened.
+ */
+export function TableTrashButton({ baseId }: { baseId: string }) {
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+
+  const trash = useQuery({
+    queryKey: ['table-trash', baseId],
+    queryFn: () => dataApi.listTableTrash(baseId),
+    enabled: open,
+  });
+
+  const restore = useMutation({
+    mutationFn: (tableId: string) => dataApi.restoreTable(baseId, tableId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['table-trash', baseId] });
+      await queryClient.invalidateQueries({ queryKey: ['tables', baseId] });
+    },
+  });
+
+  return (
+    <div className="relative">
+      <Button size="sm" variant="ghost" onClick={() => setOpen((v) => !v)} aria-label="Deleted tables">
+        Trash
+      </Button>
+      {open && (
+        <>
+          <button
+            type="button"
+            aria-label="Close trash"
+            onClick={() => setOpen(false)}
+            className="fixed inset-0 z-40 cursor-default"
+          />
+          <div className="absolute right-0 top-full z-50 mt-1 w-72 rounded-md border border-line bg-surface p-2 shadow-lg">
+            <p className="px-1 text-sm font-medium text-primary">Deleted tables</p>
+            {restore.error instanceof ApiError && (
+              <Alert tone="danger" className="mt-2">
+                {restore.error.message}
+              </Alert>
+            )}
+            <div className="mt-1 max-h-64 overflow-y-auto">
+              {trash.isPending && <p className="px-1 py-2 text-xs text-tertiary">Loading…</p>}
+              {trash.isSuccess && trash.data.length === 0 && (
+                <p className="px-1 py-2 text-xs text-tertiary">No deleted tables.</p>
+              )}
+              {trash.isSuccess &&
+                trash.data.map((table) => (
+                  <div key={table.id} className="flex items-center gap-2 rounded px-1 py-1 hover:bg-sunken">
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm text-primary">{table.name}</span>
+                      <span className="block text-2xs text-tertiary">{table.recordCount} records</span>
+                    </span>
+                    <Button size="sm" variant="secondary" loading={restore.isPending} onClick={() => restore.mutate(table.id)}>
+                      Restore
+                    </Button>
+                  </div>
+                ))}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/** Deleted records of this table, each with a Restore button — the way back from a mistake. */
+function RecordTrash({
+  tableId,
+  onRestored,
+  onBack,
+}: {
+  tableId: string;
+  onRestored: () => Promise<void>;
+  onBack: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const trash = useQuery({
+    queryKey: ['trash', tableId],
+    queryFn: () => dataApi.listRecordTrash(tableId),
+  });
+
+  const restore = useMutation({
+    mutationFn: (recordId: string) => dataApi.restoreRecords(tableId, [recordId]),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['trash', tableId] });
+      await onRestored();
+    },
+  });
+
+  return (
+    <div className="p-2">
+      <div className="flex items-center gap-1">
+        <button type="button" onClick={onBack} aria-label="Back" className="rounded px-1.5 py-0.5 text-sm text-secondary hover:bg-sunken">
+          ‹
+        </button>
+        <span className="text-sm font-medium text-primary">Trash</span>
+      </div>
+
+      {restore.error instanceof ApiError && (
+        <Alert tone="danger" className="mt-2">
+          {restore.error.message}
+        </Alert>
+      )}
+
+      <div className="mt-2 max-h-64 overflow-y-auto">
+        {trash.isPending && <p className="px-1 py-2 text-xs text-tertiary">Loading…</p>}
+        {trash.isSuccess && trash.data.length === 0 && (
+          <p className="px-1 py-2 text-xs text-tertiary">The trash is empty — nothing has been deleted.</p>
+        )}
+        {trash.isSuccess &&
+          trash.data.map((row) => (
+            <div key={row.id} className="flex items-center gap-2 rounded px-1 py-1 hover:bg-sunken">
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm text-primary">{row.label}</span>
+                <span className="block text-2xs text-tertiary">
+                  deleted {row.deletedAt ? new Date(row.deletedAt).toLocaleString() : ''}
+                </span>
+              </span>
+              <Button size="sm" variant="secondary" loading={restore.isPending} onClick={() => restore.mutate(row.id)}>
+                Restore
+              </Button>
+            </div>
+          ))}
+      </div>
+    </div>
   );
 }
 

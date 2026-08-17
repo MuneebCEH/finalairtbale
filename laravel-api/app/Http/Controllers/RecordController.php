@@ -182,8 +182,20 @@ class RecordController extends Controller
 
         // Automations fire after the write is committed; a failing automation never fails the
         // user's write. Capped at a few records so a bulk import cannot fan out a storm.
+        // The history gets a 'created' entry under the same cap — bulk imports state their own
+        // origin and need no per-row timeline.
         if (count($created) <= 5) {
+            $now = Carbon::now();
             foreach ($created as $r) {
+                \App\Models\RecordRevision::create([
+                    'organization_id' => $tenant->organizationId,
+                    'table_id' => $r->table_id,
+                    'record_id' => $r->id,
+                    'user_id' => $tenant->userId(),
+                    'kind' => 'created',
+                    'changes' => null,
+                    'created_at' => $now,
+                ]);
                 \App\Support\AutomationRunner::fire('created', $r);
             }
         }
@@ -218,6 +230,16 @@ class RecordController extends Controller
         $fields = $this->writableFields($tableId);
         $incoming = $this->sanitize($request->input('fields', []), $fields);
 
+        // History first, while the old values are still in hand: only the fields whose value
+        // actually changed make it into the diff, so the timeline never logs a non-edit.
+        $before = (array) $record->data;
+        $diff = [];
+        foreach ($incoming as $fieldId => $value) {
+            if (($before[$fieldId] ?? null) !== $value) {
+                $diff[$fieldId] = ['from' => $before[$fieldId] ?? null, 'to' => $value];
+            }
+        }
+
         // Merge: the update only touches the keys actually sent (per-field last-write-wins).
         $record->forceFill([
             'data' => array_merge((array) $record->data, $incoming),
@@ -225,6 +247,18 @@ class RecordController extends Controller
             'updated_by' => $tenant->userId(),
             'updated_at' => Carbon::now(),
         ])->save();
+
+        if ($diff !== []) {
+            \App\Models\RecordRevision::create([
+                'organization_id' => $tenant->organizationId,
+                'table_id' => $record->table_id,
+                'record_id' => $record->id,
+                'user_id' => $tenant->userId(),
+                'kind' => 'updated',
+                'changes' => $diff,
+                'created_at' => Carbon::now(),
+            ]);
+        }
 
         \App\Support\AutomationRunner::fire('updated', $record);
 

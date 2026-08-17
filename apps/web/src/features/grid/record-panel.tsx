@@ -48,6 +48,12 @@ export function RecordPanel({
     queryFn: () => dataApi.listComments(record.id),
   });
 
+  // History loads with the panel: the question "who changed this" usually arrives already urgent.
+  const revisions = useQuery({
+    queryKey: ['revisions', record.id],
+    queryFn: () => dataApi.listRevisions(record.id),
+  });
+
   const addComment = useMutation({
     mutationFn: (text: string) => dataApi.createComment(record.id, text),
     onSuccess: () => {
@@ -257,9 +263,43 @@ export function RecordPanel({
                 {addComment.isPending ? 'Posting…' : 'Comment'}
               </button>
             </form>
+
+            {/* History — who changed which field, newest first. */}
+            <div className="max-h-48 shrink-0 overflow-y-auto border-t border-line px-4 py-2">
+              <h3 className="text-xs font-medium uppercase tracking-wide text-tertiary">History</h3>
+              {revisions.isPending && <p className="mt-1 text-2xs text-tertiary">Loading…</p>}
+              {revisions.isSuccess && revisions.data.length === 0 && (
+                <p className="mt-1 text-2xs text-tertiary">No edits recorded yet.</p>
+              )}
+              <ul className="mt-1 space-y-2">
+                {(revisions.data ?? []).map((rev) => (
+                  <li key={rev.id} className="text-2xs text-secondary">
+                    <span className="font-medium text-primary">{rev.userName}</span>{' '}
+                    {rev.kind === 'created' ? 'created this record' : rev.kind === 'restored' ? 'restored this record' : 'edited'}
+                    {rev.createdAt && (
+                      <span className="text-tertiary"> · {new Date(rev.createdAt).toLocaleString()}</span>
+                    )}
+                    {rev.changes.map((change, i) => (
+                      <span key={i} className="block truncate pl-2">
+                        {change.field}: <span className="text-tertiary line-through">{formatRevValue(change.from)}</span>{' '}
+                        → {formatRevValue(change.to)}
+                      </span>
+                    ))}
+                  </li>
+                ))}
+              </ul>
+            </div>
           </aside>
         </div>
       </div>
     </div>
   );
+}
+
+/** A revision value, compact: scalars as themselves, blanks as "empty", structures summarised. */
+function formatRevValue(value: unknown): string {
+  if (value === null || value === undefined || value === '') return 'empty';
+  if (Array.isArray(value)) return `${value.length} item${value.length === 1 ? '' : 's'}`;
+  if (typeof value === 'object') return '…';
+  return String(value).slice(0, 60);
 }
