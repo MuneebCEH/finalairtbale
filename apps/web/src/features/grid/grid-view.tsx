@@ -440,12 +440,16 @@ export function GridView({
     }) => dataApi.updateRecord(tableId, recordId, { [fieldId]: value }, version),
 
     onMutate: async ({ recordId, fieldId, value }) => {
-      await queryClient.cancelQueries({ queryKey: ['records', tableId] });
-      const previous = queryClient.getQueryData(['records', tableId]);
+      // The ACTIVE query's key carries the view state (filter/sorts/groups/search); writing to
+      // the short ['records', tableId] key updated a cache entry nobody was looking at, so the
+      // edit only appeared after some later refetch — which read as "clicking does nothing".
+      const activeKey = ['records', tableId, view.filter, view.sorts, view.groups, search];
+      await queryClient.cancelQueries({ queryKey: activeKey });
+      const previous = queryClient.getQueryData(activeKey);
 
       // Optimistic: the cell shows the new value immediately. The rollback below is what makes
       // this safe rather than merely fast.
-      queryClient.setQueryData(['records', tableId], (old: typeof recordsQuery.data) => {
+      queryClient.setQueryData(activeKey, (old: typeof recordsQuery.data) => {
         if (!old) return old;
         return {
           ...old,
@@ -461,16 +465,42 @@ export function GridView({
     onError: (_error, _variables, context) => {
       // Restores the exact prior page, so a rejected edit leaves the grid showing what the
       // server holds rather than the value the user typed.
-      if (context?.previous) queryClient.setQueryData(['records', tableId], context.previous);
+      if (context?.previous) {
+        queryClient.setQueryData(
+          ['records', tableId, view.filter, view.sorts, view.groups, search],
+          context.previous,
+        );
+      }
     },
 
     onSuccess: (updated) => {
       // Replace with the server's version of the row: it carries the authoritative version
       // number and any value the field type coerced ("$1,234.50" becoming 1234.5).
-      queryClient.setQueryData(['records', tableId], (old: typeof recordsQuery.data) => {
-        if (!old) return old;
-        return { ...old, data: old.data.map((row) => (row.id === updated.id ? updated : row)) };
-      });
+      queryClient.setQueryData(
+        ['records', tableId, view.filter, view.sorts, view.groups, search],
+        (old: typeof recordsQuery.data) => {
+          if (!old) return old;
+          return { ...old, data: old.data.map((row) => (row.id === updated.id ? updated : row)) };
+        },
+      );
+    },
+  });
+
+  // Airtable lets a checkbox column pick its mark (⭐, ❤️, ✅…); the choice lives in the
+  // field's options so every viewer of the table sees the same mark.
+  const setCheckboxEmoji = useMutation({
+    mutationFn: ({ fieldId, emoji }: { fieldId: string; emoji: string | null }) => {
+      const field = allFields.find((f) => f.id === fieldId);
+      const options = { ...((field?.options as Record<string, unknown>) ?? {}) };
+      if (emoji) {
+        options['emoji'] = emoji;
+      } else {
+        delete options['emoji'];
+      }
+      return dataApi.updateField(tableId, fieldId, { options });
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['fields', tableId] });
     },
   });
 
@@ -583,10 +613,19 @@ export function GridView({
    * reached storage, and the record was never updated. That failure is invisible from the server's
    * side, which is why the API smoke test passed while the feature did not work.
    */
+  // Read through refs, not the closure: memoised cells keep old function props (the memo
+  // comparator ignores them on purpose), so a commit captured at render time would see the
+  // records as they were BEFORE the previous edit — making every second click a no-op or a
+  // version conflict. The refs always hold the current page.
+  const recordsRef = useRef(records);
+  recordsRef.current = records;
+  const fieldsRef = useRef(fields);
+  fieldsRef.current = fields;
+
   const commitAt = useCallback(
     (row: number, column: number, value: unknown) => {
-      const record = records[row];
-      const field = fields[column];
+      const record = recordsRef.current[row];
+      const field = fieldsRef.current[column];
       if (!record || !field) return;
       if (record.fields[field.id] === value) return;
 
@@ -597,7 +636,7 @@ export function GridView({
         version: record.version,
       });
     },
-    [records, fields, updateCell],
+    [updateCell],
   );
 
   /** The editor's commit: leaves edit mode, then writes through the same path as everything else. */
@@ -815,6 +854,7 @@ export function GridView({
                   setDragOver(null);
                 }}
                 onMove={moveColumn}
+                onSetEmoji={(fieldId, emoji) => setCheckboxEmoji.mutate({ fieldId, emoji })}
               />
             ))}
           </div>
@@ -1061,6 +1101,8 @@ function GridRow({
  * is a feature that does not exist for anybody using a keyboard or a screen reader, and this is
  * three lines of handler.
  */
+const CHECKBOX_EMOJIS = ['✅', '⭐', '❤️', '👍', '🔥', '🚩', '💊', '📌'];
+
 function ColumnHeader({
   field,
   width,
@@ -1073,6 +1115,7 @@ function ColumnHeader({
   onDrop,
   onDragEnd,
   onMove,
+  onSetEmoji,
 }: {
   field: Field;
   width: number;
@@ -1085,7 +1128,10 @@ function ColumnHeader({
   onDrop: (index: number) => void;
   onDragEnd: () => void;
   onMove: (from: number, to: number) => void;
+  onSetEmoji: (fieldId: string, emoji: string | null) => void;
 }) {
+  const [emojiOpen, setEmojiOpen] = useState(false);
+  const currentEmoji = (field.options as { emoji?: string } | null)?.emoji;
   const startResize = (event: React.MouseEvent): void => {
     event.preventDefault();
     event.stopPropagation();
@@ -1155,6 +1201,61 @@ function ColumnHeader({
           ●
         </span>
       )}
+      {/* Checkbox columns can pick their mark (Airtable's ⭐/❤️ style); everyone sees it. */}
+      {field.type === 'checkbox' && (
+        <span className="relative ml-auto">
+          <button
+            type="button"
+            aria-label={`Choose the mark for ${field.name}`}
+            title="Choose checkbox emoji"
+            draggable={false}
+            onDragStart={(event) => event.preventDefault()}
+            onMouseDown={(event) => event.stopPropagation()}
+            onClick={(event) => {
+              event.stopPropagation();
+              setEmojiOpen((v) => !v);
+            }}
+            className="rounded px-0.5 text-xs hover:bg-accent-subtle"
+          >
+            {currentEmoji ?? '☑'}
+          </button>
+          {emojiOpen && (
+            <span className="absolute right-0 top-full z-40 mt-1 flex w-44 flex-wrap gap-1 rounded-md border border-line bg-surface p-1.5 shadow-lg">
+              {CHECKBOX_EMOJIS.map((emoji) => (
+                <button
+                  key={emoji}
+                  type="button"
+                  onMouseDown={(event) => event.stopPropagation()}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onSetEmoji(field.id, emoji);
+                    setEmojiOpen(false);
+                  }}
+                  className={cn(
+                    'rounded p-1 text-base leading-none hover:bg-sunken',
+                    currentEmoji === emoji && 'ring-2 ring-accent',
+                  )}
+                >
+                  {emoji}
+                </button>
+              ))}
+              <button
+                type="button"
+                onMouseDown={(event) => event.stopPropagation()}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onSetEmoji(field.id, null);
+                  setEmojiOpen(false);
+                }}
+                className="w-full rounded px-1 py-0.5 text-2xs text-secondary hover:bg-sunken"
+              >
+                Default ✓
+              </button>
+            </span>
+          )}
+        </span>
+      )}
+
       {/* Non-colour cue that the column is indexed, alongside the tooltip. */}
       {field.promotedSlot && (
         <span className="ml-auto text-2xs text-tertiary" title="Indexed for filtering and sorting">

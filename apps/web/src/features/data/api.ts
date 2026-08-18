@@ -391,6 +391,12 @@ export const dataApi = {
   createField: (tableId: string, input: { name: string; type: string; options?: Record<string, unknown> }) =>
     apiPost<Field>(`/v1/tables/${tableId}/fields`, input),
 
+  updateField: (
+    tableId: string,
+    fieldId: string,
+    input: { name?: string; options?: Record<string, unknown> },
+  ) => apiPatch<Field>(`/v1/tables/${tableId}/fields/${fieldId}`, input),
+
   deleteField: (tableId: string, fieldId: string) =>
     apiDelete(`/v1/tables/${tableId}/fields/${fieldId}`),
 

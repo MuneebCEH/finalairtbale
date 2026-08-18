@@ -108,13 +108,15 @@ export const Cell = memo(
     );
   },
   // The comparator is the point of the memo: a cell re-renders only when its own value, its own
-  // selection state, or its width changes.
+  // selection state, or its FIELD changes. The field is compared by reference, not id — a field
+  // whose options changed (a checkbox picking its ⭐ mark) is a new object from the query, and
+  // comparing ids made that change invisible until a full remount.
   (previous, next) =>
     previous.value === next.value &&
     previous.isSelected === next.isSelected &&
     previous.isEditing === next.isEditing &&
     previous.width === next.width &&
-    previous.field.id === next.field.id,
+    previous.field === next.field,
 );
 
 function CellDisplay({
@@ -144,21 +146,47 @@ function CellDisplay({
     );
   }
 
+  // Checkboxes render before the empty check for the same reason attachments do: an UNCHECKED
+  // cell must still show a box to click, or there is no way to check it. One click toggles —
+  // the way every spreadsheet checkbox works — and the box sits centred in its column.
+  if (field.type === 'checkbox') {
+    const checked = value === true;
+    const emoji = (field.options as { emoji?: string } | null)?.emoji;
+
+    return (
+      <button
+        type="button"
+        aria-label={checked ? `Uncheck ${field.name}` : `Check ${field.name}`}
+        onMouseDown={(event) => event.stopPropagation()}
+        onDoubleClick={(event) => event.stopPropagation()}
+        onClick={(event) => {
+          event.stopPropagation();
+          onWrite(!checked);
+        }}
+        className="flex h-full w-full items-center justify-center"
+      >
+        {checked && emoji ? (
+          <span aria-hidden="true" className="text-base leading-none">
+            {emoji}
+          </span>
+        ) : (
+          <span
+            aria-hidden="true"
+            className={cn(
+              'flex h-4 w-4 items-center justify-center rounded-sm border text-2xs transition-colors',
+              checked ? 'border-accent bg-accent text-inverted' : 'border-line hover:border-accent',
+            )}
+          >
+            {checked ? '✓' : ''}
+          </span>
+        )}
+      </button>
+    );
+  }
+
   if (value === null || value === undefined || value === '') return null;
 
   switch (field.type) {
-    case 'checkbox':
-      return (
-        <span
-          aria-hidden="true"
-          className={cn(
-            'flex h-4 w-4 items-center justify-center rounded-sm border text-2xs',
-            value === true ? 'border-accent bg-accent text-inverted' : 'border-line',
-          )}
-        >
-          {value === true ? '✓' : ''}
-        </span>
-      );
 
     case 'singleSelect':
     case 'status': {
