@@ -450,9 +450,9 @@ export function generatePlan(prompt: string): Plan {
       tables: explicit,
       widgets,
       summary:
-        `Aap ne ${explicit.length} table${explicit.length > 1 ? 's' : ''} batayi${explicit.length > 1 ? 'n' : ''} — ` +
+        `You specified ${explicit.length} table${explicit.length > 1 ? 's' : ''} — ` +
         explicit.map((t) => `**${t.name}** (${t.fields.length + 1} fields)`).join(', ') +
-        `. Field types names se auto-detect kiye hain, aur ek starter dashboard bhi banaunga.`,
+        `. Field types were auto-detected from the names, and I will add a starter dashboard too.`,
     };
   }
 
@@ -462,15 +462,15 @@ export function generatePlan(prompt: string): Plan {
       tables: template.tables,
       widgets: template.widgets,
       summary:
-        `Samajh gaya — ${template.label} banata hoon: ` +
+        `Got it — I will build ${template.label}: ` +
         template.tables.map((t) => `**${t.name}** (${t.fields.length + 1} fields, ${t.samples.length} sample rows)`).join(' + ') +
         (template.tables.some((t) => t.fields.some((f) => f.type === 'linkedRecord'))
-          ? '. Tables aapas me LINKED hongi'
+          ? '. The tables will be LINKED to each other'
           : '') +
         (template.tables.some((t) => t.fields.some((f) => f.type === 'rollup'))
-          ? ', rollup totals ke sath'
+          ? ', with rollup totals'
           : '') +
-        ', aur Interfaces me live dashboard (stats + chart) bhi.',
+        ', plus a live dashboard (stats + chart) in Interfaces.',
     };
   }
 
@@ -501,8 +501,8 @@ export function generatePlan(prompt: string): Plan {
       { type: 'chart', title: 'By status', table: 'Items', groupFieldName: 'Status' },
     ],
     summary:
-      `"${name}" ke liye ek general tracker banata hoon — Items table (Status, Date, Amount, Notes) aur dashboard. ` +
-      `Tip: agla dafa aise likho: "Patients: Name, DOB, Phone" — to bilkul wahi tables banengi. ` +
-      `Ya keywords use karo: CRM, clinic, school, inventory, projects, HR, invoices, events, property.`,
+      `I will build a general tracker for "${name}" — an Items table (Status, Date, Amount, Notes) and a dashboard. ` +
+      `Tip: next time write it like "Patients: Name, DOB, Phone" to get exactly those tables. ` +
+      `Or use keywords: CRM, clinic, school, inventory, projects, HR, invoices, events, property.`,
   };
 }

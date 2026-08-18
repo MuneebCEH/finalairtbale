@@ -151,7 +151,7 @@ export function WorkspaceWizard({
           <h2 className="text-md font-semibold text-primary">New workspace</h2>
           <p className="mt-1 text-sm text-secondary">
             {mode === 'ai'
-              ? 'Prompt likho — AI tables, fields, links, sample data aur dashboard sab bana dega.'
+              ? 'Describe what you need — the AI builds the tables, fields, links, sample data and dashboard.'
               : 'Say what you need — tables and their fields — and it will be built for you.'}
           </p>
         </div>

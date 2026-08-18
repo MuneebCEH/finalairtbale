@@ -44,9 +44,9 @@ export function AiBuilderChat({
     {
       role: 'assistant',
       text:
-        'Batao kya banana hai — main tables, fields, links, sample data aur dashboard sab bana dunga.\n\n' +
-        'Misalein:\n' +
-        '• "clinic ka system — patients aur appointments"\n' +
+        'Tell me what to build — I will create the tables, fields, links, sample data and a dashboard.\n\n' +
+        'Examples:\n' +
+        '• "a clinic system — patients and appointments"\n' +
         '• "sales CRM with deals pipeline"\n' +
         '• "Patients: Name, DOB, Phone, Fee Paid; Visits: Date, Status"\n' +
         '• inventory / school / HR / invoices / events / property…',
@@ -91,7 +91,7 @@ export function AiBuilderChat({
         <input
           value={wsName}
           onChange={(event) => setWsName(event.target.value)}
-          placeholder="AI suggest kar dega — ya khud likho"
+          placeholder="AI will suggest one — or type your own"
           className="h-9 max-w-sm rounded border border-line bg-surface px-2 text-sm font-normal text-primary"
         />
       </label>
@@ -150,7 +150,7 @@ export function AiBuilderChat({
               if (text && !build.isPending) ask(text);
             }
           }}
-          placeholder='e.g. "clinic ka system banao" ya "Products: Name, SKU, Price, Stock Qty"'
+          placeholder='e.g. "build a clinic system" or "Products: Name, SKU, Price, Stock Qty"'
           aria-label="Describe what to build"
           rows={2}
           className="min-h-[2.5rem] flex-1 resize-none rounded border border-line bg-surface p-2 text-sm text-primary"
