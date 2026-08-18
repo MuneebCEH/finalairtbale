@@ -43,7 +43,10 @@ class RecordController extends Controller
         $labels = RecordLinks::labelMap($lf, $rows);
 
         return response()->json([
-            'data' => $rows->map(fn (Record $r) => $this->dto($r, null, $lf, $labels))->values()->all(),
+            'data' => \App\Support\FormulaEngine::inject(
+                $tableId,
+                $rows->map(fn (Record $r) => $this->dto($r, null, $lf, $labels))->values()->all(),
+            ),
             'meta' => [
                 'hasMore' => $hasMore,
                 'nextCursor' => $hasMore ? $rows->last()->id : null,
@@ -120,7 +123,10 @@ class RecordController extends Controller
         $labels = RecordLinks::labelMap($lf, $rows);
 
         return response()->json([
-            'data' => $rows->map(fn (Record $r) => $this->dto($r, $project, $lf, $labels))->values()->all(),
+            'data' => \App\Support\FormulaEngine::inject(
+                $tableId,
+                $rows->map(fn (Record $r) => $this->dto($r, $project, $lf, $labels))->values()->all(),
+            ),
             'meta' => [
                 'hasMore' => $hasMore,
                 'nextCursor' => $hasMore ? $this->encodeCursor($offset + $limit) : null,
@@ -302,7 +308,7 @@ class RecordController extends Controller
         $lf = RecordLinks::linkFields($tableId);
         $labels = RecordLinks::labelMap($lf, [$r]);
 
-        return $this->dto($r, null, $lf, $labels);
+        return \App\Support\FormulaEngine::injectOne($tableId, $this->dto($r, null, $lf, $labels));
     }
 
     private function find(string $tableId, string $recordId): Record

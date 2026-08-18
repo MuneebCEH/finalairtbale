@@ -12,7 +12,7 @@ import { dataApi, type Field, type RecordRow, type SavedView } from '../data/api
 import { CalendarView, GalleryView } from '../views/calendar';
 import { KanbanBoard } from '../views/kanban';
 import { ChartView, TimelineView } from '../views/timeline';
-import { ViewToolbar, type ViewState } from '../views/toolbar';
+import { ViewToolbar, rowColorFor, type ViewState } from '../views/toolbar';
 import { ViewMenu } from '../views/view-menu';
 import { ViewSwitcher, type ViewType } from '../views/view-switcher';
 
@@ -140,6 +140,7 @@ export function GridView({
     groups: [],
     hiddenFieldIds: [],
     rowHeight: 'short',
+    colorRules: [],
   });
   const [search, setSearch] = useState('');
   const [viewType, setViewType] = useState<ViewType>('grid');
@@ -169,6 +170,7 @@ export function GridView({
       groups: config.groups ?? [],
       hiddenFieldIds: config.hiddenFieldIds ?? [],
       rowHeight: config.rowHeight ?? 'short',
+      colorRules: config.colorRules ?? [],
       ...(config.filter ? { filter: config.filter } : {}),
     });
     setViewType(config.viewType ?? (saved.type as ViewType) ?? 'grid');
@@ -252,6 +254,10 @@ export function GridView({
     // loading state, which also slams shut whichever toolbar panel the user was still using.
     // Showing the previous rows until the new ones arrive is what Airtable does.
     placeholderData: (previous) => previous,
+    // Near-real-time collaboration on hosting without websockets: the grid quietly re-pulls every
+    // 30 seconds, so a colleague's edits appear on their own. Paused while the tab is hidden
+    // (React Query's default), so an idle tab costs nothing.
+    refetchInterval: 30_000,
     queryFn: async () => {
       // Follows the cursor until the table is fully loaded (capped), because a grid that quietly
       // shows one page of a 289-row table reads as lost data — the exact complaint that led here.
@@ -557,6 +563,34 @@ export function GridView({
     },
   });
 
+  // Read through refs, not the closure — see the note above `commitAt` below.
+  const recordsRef = useRef(records);
+  recordsRef.current = records;
+  const fieldsRef = useRef(fields);
+  fieldsRef.current = fields;
+
+  // Session-local undo: every cell write remembers the value it replaced, and Ctrl+Z writes it
+  // back through the same mutation path (so the server, the history timeline, and any other
+  // viewer all see the revert as a normal edit). Local to this tab on purpose — undoing a
+  // *colleague's* edit is a surprise, not an undo.
+  const undoStackRef = useRef<Array<{ recordId: string; fieldId: string; previous: unknown }>>([]);
+
+  const undo = useCallback(() => {
+    const last = undoStackRef.current.pop();
+    if (!last) return;
+    // The record's CURRENT version, not the one from when the edit was made — two edits to the
+    // same row would otherwise make the second undo a version conflict.
+    const record = recordsRef.current.find((row) => row.id === last.recordId);
+    if (!record) return;
+
+    updateCell.mutate({
+      recordId: last.recordId,
+      fieldId: last.fieldId,
+      value: last.previous,
+      version: record.version,
+    });
+  }, [updateCell]);
+
   // ── Keyboard navigation ───────────────────────────────────────────────────
 
   const move = useCallback(
@@ -628,7 +662,28 @@ export function GridView({
 
     element.addEventListener('keydown', handler);
     return () => element.removeEventListener('keydown', handler);
-  }, [editing, selection, fields, move]);
+  }, [editing, selection, fields, move, undo]);
+
+  // Ctrl+Z / Cmd+Z reverts the last cell edit made in this tab. Window-level, not grid-level:
+  // after a commit the focus usually rests on <body>, and an undo that only works while the grid
+  // happens to hold focus reads as broken. Typing surfaces keep their native text undo.
+  useEffect(() => {
+    const handler = (event: KeyboardEvent): void => {
+      if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 'z' || event.shiftKey) return;
+      const target = event.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)
+      ) {
+        return;
+      }
+      event.preventDefault();
+      undo();
+    };
+
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [undo]);
 
   /**
    * Writes a value to a cell named by its coordinates.
@@ -643,17 +698,19 @@ export function GridView({
   // comparator ignores them on purpose), so a commit captured at render time would see the
   // records as they were BEFORE the previous edit — making every second click a no-op or a
   // version conflict. The refs always hold the current page.
-  const recordsRef = useRef(records);
-  recordsRef.current = records;
-  const fieldsRef = useRef(fields);
-  fieldsRef.current = fields;
-
   const commitAt = useCallback(
     (row: number, column: number, value: unknown) => {
       const record = recordsRef.current[row];
       const field = fieldsRef.current[column];
       if (!record || !field) return;
       if (record.fields[field.id] === value) return;
+
+      undoStackRef.current.push({
+        recordId: record.id,
+        fieldId: field.id,
+        previous: record.fields[field.id] ?? null,
+      });
+      if (undoStackRef.current.length > 100) undoStackRef.current.shift();
 
       updateCell.mutate({
         recordId: record.id,
@@ -664,6 +721,7 @@ export function GridView({
     },
     [updateCell],
   );
+
 
   /** The editor's commit: leaves edit mode, then writes through the same path as everything else. */
   const commit = useCallback(
@@ -910,6 +968,7 @@ export function GridView({
                     record={item.record}
                     // The record's own index, not its position in `rows` — see the note on `rows`.
                     rowIndex={item.recordIndex}
+                    rowColor={rowColorFor(item.record.fields, view.colorRules)}
                     fields={fields}
                     baseId={baseId}
                     widthOf={widthOf}
@@ -1017,6 +1076,7 @@ export function GridView({
 function GridRow({
   record,
   rowIndex,
+  rowColor,
   fields,
   baseId,
   widthOf,
@@ -1033,6 +1093,8 @@ function GridRow({
 }: {
   record: RecordRow;
   rowIndex: number;
+  /** Tint from the view's color rules; null rows keep the plain background. */
+  rowColor: string | null;
   fields: Field[];
   baseId: string;
   widthOf: (field: Field) => number;
@@ -1057,7 +1119,12 @@ function GridRow({
         'group/row flex',
         (isSelectedRow || isChecked) && 'bg-accent-subtle/30',
       )}
-      style={{ height: ROW_HEIGHT }}
+      // Selection highlight outranks the rule tint — knowing where the cursor is beats the
+      // decoration for the row you are actively on.
+      style={{
+        height: ROW_HEIGHT,
+        ...(rowColor && !isSelectedRow && !isChecked ? { backgroundColor: rowColor } : {}),
+      }}
     >
       {/* Row number, frozen. The checkbox appears on hover (or stays once checked), the way a
           spreadsheet keeps its margin quiet until you need to act on rows. */}

@@ -31,6 +31,7 @@ const FIELD_TYPES = [
   { value: 'url', label: 'URL' },
   { value: 'phone', label: 'Phone' },
   { value: 'rating', label: 'Rating' },
+  { value: 'formula', label: 'Formula' },
 ] as const;
 
 /**
@@ -255,6 +256,7 @@ function AddFieldRow({
 }) {
   const [name, setName] = useState('');
   const [type, setType] = useState<string>('singleLineText');
+  const [formula, setFormula] = useState('');
 
   return (
     <div className="border-b border-line bg-sunken px-4 py-3">
@@ -269,6 +271,7 @@ function AddFieldRow({
         onSubmit={(event) => {
           event.preventDefault();
           if (!name.trim()) return;
+          if (type === 'formula' && !formula.trim()) return;
           onSubmit({
             name: name.trim(),
             type,
@@ -284,8 +287,10 @@ function AddFieldRow({
                   },
                 }
               : {}),
+            ...(type === 'formula' ? { options: { formula: formula.trim() } } : {}),
           });
           setName('');
+          setFormula('');
         }}
       >
         <label className="flex flex-col gap-1">
@@ -313,7 +318,28 @@ function AddFieldRow({
           </select>
         </label>
 
-        <Button type="submit" size="sm" variant="primary" loading={pending} disabled={!name.trim()}>
+        {type === 'formula' && (
+          <label className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-secondary">
+              Formula — reference fields as {'{Field Name}'}
+            </span>
+            <input
+              value={formula}
+              onChange={(event) => setFormula(event.target.value)}
+              placeholder={'{Price} * {Qty}   or   IF({Status} = "Paid", "✓", "…")'}
+              aria-label="Formula"
+              className="h-8 w-96 max-w-full rounded border border-line bg-surface px-2 font-mono text-sm text-primary"
+            />
+          </label>
+        )}
+
+        <Button
+          type="submit"
+          size="sm"
+          variant="primary"
+          loading={pending}
+          disabled={!name.trim() || (type === 'formula' && !formula.trim())}
+        >
           Add
         </Button>
         <Button type="button" size="sm" variant="ghost" onClick={onCancel}>

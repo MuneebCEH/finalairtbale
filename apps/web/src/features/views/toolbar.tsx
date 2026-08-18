@@ -24,6 +24,87 @@ export interface ViewState {
   groups: Group[];
   hiddenFieldIds: string[];
   rowHeight: RowHeight;
+  /** Airtable's "Color" — the first matching rule tints the whole row. */
+  colorRules?: ColorRule[];
+}
+
+export interface ColorRule {
+  fieldId: string;
+  operator: string;
+  value?: unknown;
+  color: string;
+}
+
+/** The row tints on offer — light enough that black text stays readable on every one. */
+export const ROW_COLORS = [
+  { value: '#fee2e2', label: 'Red' },
+  { value: '#ffedd5', label: 'Orange' },
+  { value: '#fef9c3', label: 'Yellow' },
+  { value: '#dcfce7', label: 'Green' },
+  { value: '#ccfbf1', label: 'Teal' },
+  { value: '#dbeafe', label: 'Blue' },
+  { value: '#ede9fe', label: 'Purple' },
+  { value: '#fce7f3', label: 'Pink' },
+  { value: '#e5e7eb', label: 'Gray' },
+] as const;
+
+/**
+ * The first rule the record matches decides its color — same first-wins semantics as Airtable,
+ * so rule order is meaningful and predictable. Evaluated client-side over the loaded rows; the
+ * operators mirror the filter vocabulary so what you can filter by, you can color by.
+ */
+export function rowColorFor(
+  recordFields: Record<string, unknown>,
+  rules: ColorRule[] | undefined,
+): string | null {
+  if (!rules || rules.length === 0) return null;
+  for (const rule of rules) {
+    if (rule.fieldId && ruleMatches(recordFields[rule.fieldId], rule.operator, rule.value)) {
+      return rule.color;
+    }
+  }
+  return null;
+}
+
+function ruleMatches(raw: unknown, operator: string, target: unknown): boolean {
+  const isBlank =
+    raw === null || raw === undefined || raw === '' || (Array.isArray(raw) && raw.length === 0);
+  const text = isBlank ? '' : Array.isArray(raw) ? '' : String(raw);
+  const lower = text.toLowerCase();
+  const targetText = String(target ?? '').trim().toLowerCase();
+
+  switch (operator) {
+    case 'is': {
+      // Checkbox rules accept the words people type for them.
+      if (typeof raw === 'boolean') {
+        return raw ? ['true', 'checked', 'yes', '1', '✓'].includes(targetText) : ['false', 'unchecked', 'no', '0', ''].includes(targetText);
+      }
+      const n = Number(text);
+      const tn = Number(targetText);
+      if (text !== '' && targetText !== '' && !Number.isNaN(n) && !Number.isNaN(tn)) return n === tn;
+      return lower === targetText;
+    }
+    case 'isNot':
+      return !ruleMatches(raw, 'is', target);
+    case 'contains':
+      return targetText !== '' && lower.includes(targetText);
+    case 'doesNotContain':
+      return !(targetText !== '' && lower.includes(targetText));
+    case 'isGreater':
+      return text !== '' && !Number.isNaN(Number(text)) && Number(text) > Number(targetText);
+    case 'isLess':
+      return text !== '' && !Number.isNaN(Number(text)) && Number(text) < Number(targetText);
+    case 'isBefore':
+      return text !== '' && Date.parse(text) < Date.parse(String(target ?? ''));
+    case 'isAfter':
+      return text !== '' && Date.parse(text) > Date.parse(String(target ?? ''));
+    case 'isEmpty':
+      return isBlank || raw === false;
+    case 'isNotEmpty':
+      return !(isBlank || raw === false);
+    default:
+      return false;
+  }
 }
 
 export type RowHeight = 'short' | 'medium' | 'tall' | 'extraTall';
@@ -102,6 +183,12 @@ export function ViewToolbar({
         icon="⇅"
         active={state.sorts.length > 0}
         onClick={() => toggle('sort')}
+      />
+      <ToolbarButton
+        label={state.colorRules?.length ? `Colored by ${state.colorRules.length}` : 'Color'}
+        icon="🎨"
+        active={(state.colorRules?.length ?? 0) > 0}
+        onClick={() => toggle('color')}
       />
       <ToolbarButton label="Row height" icon="≡" onClick={() => toggle('height')} />
 
@@ -187,6 +274,22 @@ export function ViewToolbar({
             max={10}
             emptyLabel="Pick a field to sort by"
             onChange={(sorts) => onChange({ ...state, sorts })}
+          />
+        </Panel>
+      )}
+
+      {open === 'color' && (
+        <Panel onClose={() => setOpen(null)} title="Color" wide>
+          <ColorRulesEditor
+            fields={fields}
+            rules={state.colorRules ?? []}
+            canEdit={canEdit}
+            onChange={(colorRules) =>
+              onChange({
+                ...state,
+                ...(colorRules.length > 0 ? { colorRules } : { colorRules: [] }),
+              })
+            }
           />
         </Panel>
       )}
@@ -519,6 +622,139 @@ function FieldListEditor({
           className="rounded px-2 py-1 text-sm text-accent-text hover:bg-sunken"
         >
           + Add
+        </button>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Airtable's color-rule editor: each rule reads "where <field> <operator> <value>, tint <color>".
+ * First matching rule wins, so the list order is the priority order.
+ */
+function ColorRulesEditor({
+  fields,
+  rules,
+  onChange,
+  canEdit,
+}: {
+  fields: Field[];
+  rules: ColorRule[];
+  onChange: (rules: ColorRule[]) => void;
+  canEdit: boolean;
+}) {
+  const update = (index: number, patch: Partial<ColorRule>) => {
+    const next = [...rules];
+    next[index] = { ...(next[index] as ColorRule), ...patch };
+    onChange(next);
+  };
+
+  return (
+    <div className="space-y-1.5 p-1">
+      {rules.length === 0 && (
+        <p className="px-1 py-2 text-sm text-tertiary">
+          No color rules. Rows matching a rule get its color — the first match wins.
+        </p>
+      )}
+
+      {rules.map((rule, index) => {
+        const field = fields.find((f) => f.id === rule.fieldId);
+        const operators = operatorsFor(field?.type ?? 'singleLineText');
+
+        return (
+          <div key={index} className="flex flex-wrap items-center gap-1">
+            <span className="w-12 shrink-0 text-xs text-tertiary">
+              {index === 0 ? 'Where' : 'or'}
+            </span>
+
+            <select
+              value={rule.fieldId}
+              disabled={!canEdit}
+              aria-label="Color rule field"
+              onChange={(event) => update(index, { fieldId: event.target.value })}
+              className="h-7 min-w-28 flex-1 rounded border border-line bg-surface px-1 text-sm"
+            >
+              {fields.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.name}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={rule.operator}
+              disabled={!canEdit}
+              aria-label="Color rule operator"
+              onChange={(event) => update(index, { operator: event.target.value })}
+              className="h-7 w-32 rounded border border-line bg-surface px-1 text-sm"
+            >
+              {operators.map((operator) => (
+                <option key={operator.value} value={operator.value}>
+                  {operator.label}
+                </option>
+              ))}
+            </select>
+
+            {!VALUELESS.has(rule.operator) && (
+              <input
+                value={String(rule.value ?? '')}
+                disabled={!canEdit}
+                onChange={(event) => update(index, { value: event.target.value })}
+                placeholder="Value"
+                aria-label="Color rule value"
+                className="h-7 w-28 rounded border border-line bg-surface px-1 text-sm"
+              />
+            )}
+
+            <span className="flex items-center gap-0.5">
+              {ROW_COLORS.map((color) => (
+                <button
+                  key={color.value}
+                  type="button"
+                  disabled={!canEdit}
+                  title={color.label}
+                  aria-label={`Color ${color.label}`}
+                  onClick={() => update(index, { color: color.value })}
+                  className={cn(
+                    'h-5 w-5 rounded-full border',
+                    rule.color === color.value ? 'border-2 border-accent' : 'border-line',
+                  )}
+                  style={{ backgroundColor: color.value }}
+                />
+              ))}
+            </span>
+
+            <button
+              type="button"
+              disabled={!canEdit}
+              aria-label="Remove color rule"
+              onClick={() => onChange(rules.filter((_, i) => i !== index))}
+              className="px-1 text-tertiary hover:text-danger-text"
+            >
+              ✕
+            </button>
+          </div>
+        );
+      })}
+
+      {rules.length < 5 && (
+        <button
+          type="button"
+          disabled={!canEdit || fields.length === 0}
+          onClick={() =>
+            onChange([
+              ...rules,
+              {
+                fieldId: fields[0]?.id as string,
+                operator: 'is',
+                value: '',
+                color: ROW_COLORS[0].value,
+              },
+            ])
+          }
+          className="rounded px-2 py-1 text-sm text-accent-text hover:bg-sunken"
+        >
+          + Add color rule
         </button>
       )}
     </div>

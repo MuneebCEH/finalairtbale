@@ -66,6 +66,38 @@ export function ViewMenu({
     },
   });
 
+  const [copied, setCopied] = useState(false);
+
+  const share = useMutation({
+    mutationFn: () => dataApi.shareView(activeViewId!),
+    onSuccess: async (updated) => {
+      await refresh();
+      void copyShareLink(updated.shareSlug ?? null);
+    },
+  });
+
+  const unshare = useMutation({
+    mutationFn: () => dataApi.unshareView(activeViewId!),
+    onSuccess: () => void refresh(),
+  });
+
+  /** The public page lives in the same static export; the slug rides the query string. */
+  function shareUrl(slug: string): string {
+    return `${window.location.origin}/share/?s=${slug}`;
+  }
+
+  async function copyShareLink(slug: string | null) {
+    if (!slug) return;
+    try {
+      await navigator.clipboard.writeText(shareUrl(slug));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard can be denied — the prompt still shows the URL for hand-copying.
+      window.prompt('Copy this share link:', shareUrl(slug));
+    }
+  }
+
   const remove = useMutation({
     mutationFn: () => dataApi.deleteView(activeViewId!),
     onSuccess: async () => {
@@ -255,6 +287,27 @@ th,td{border:1px solid #ccc;padding:4px 6px;text-align:left;font-size:11px}th{ba
                 <div className="mx-1 my-1 border-t border-line" />
                 <Item label={exporting ? 'Preparing…' : 'Download CSV'} icon="⇩" onClick={() => void downloadCsv()} />
                 <Item label="Print view" icon="⎙" onClick={() => void printView()} />
+                <div className="mx-1 my-1 border-t border-line" />
+                {active?.shareSlug ? (
+                  <>
+                    <Item
+                      label={copied ? 'Link copied ✓' : 'Copy share link'}
+                      icon="🔗"
+                      onClick={() => void copyShareLink(active.shareSlug ?? null)}
+                    />
+                    <Item
+                      label={unshare.isPending ? 'Stopping…' : 'Stop sharing'}
+                      icon="⊘"
+                      onClick={() => unshare.mutate()}
+                    />
+                  </>
+                ) : (
+                  <Item
+                    label={share.isPending ? 'Creating link…' : copied ? 'Link copied ✓' : 'Share view (public link)'}
+                    icon="🔗"
+                    onClick={() => share.mutate()}
+                  />
+                )}
                 <div className="mx-1 my-1 border-t border-line" />
                 <Item
                   label={remove.isPending ? 'Deleting…' : 'Delete view'}

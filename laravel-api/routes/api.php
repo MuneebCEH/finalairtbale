@@ -61,6 +61,9 @@ Route::prefix('v1')->group(function () {
     Route::get('f/{slug}', [PublicFormController::class, 'show']);
     Route::post('f/{slug}', [PublicFormController::class, 'submit']);
 
+    // Public shared view — read-only data for anyone holding the slug.
+    Route::get('shared/{slug}', [\App\Http\Controllers\SharedViewController::class, 'show']);
+
     // Current user
     Route::middleware('session')->group(function () {
         Route::get('me', [MeController::class, 'show']);
@@ -111,6 +114,8 @@ Route::prefix('v1')->group(function () {
             Route::post('tables/{tableId}/views', [ViewController::class, 'create']);
             Route::patch('views/{viewId}', [ViewController::class, 'update']);
             Route::delete('views/{viewId}', [ViewController::class, 'delete']);
+            Route::post('views/{viewId}/share', [ViewController::class, 'share']);
+            Route::delete('views/{viewId}/share', [ViewController::class, 'unshare']);
 
             Route::get('tables/{tableId}/fields', [FieldController::class, 'list']);
             Route::post('tables/{tableId}/fields', [FieldController::class, 'create']);

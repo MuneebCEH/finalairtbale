@@ -177,8 +177,19 @@ export interface SavedView {
   type: string;
   config: unknown;
   position: number;
+  /** Set while the view is shared publicly; the slug is the whole authorization. */
+  shareSlug?: string | null;
   createdAt?: string;
   updatedAt?: string;
+}
+
+/** What the public share endpoint returns — enough to render a read-only grid. */
+export interface SharedViewPayload {
+  view: { name: string; type: string };
+  table: { name: string };
+  fields: Array<Pick<Field, 'id' | 'name' | 'type' | 'isPrimary' | 'options'>>;
+  records: Array<{ id: string; fields: Record<string, unknown> }>;
+  truncated: boolean;
 }
 
 export interface Comment {
@@ -311,6 +322,12 @@ export const dataApi = {
     apiPatch<SavedView>(`/v1/views/${viewId}`, input),
 
   deleteView: (viewId: string) => apiDelete(`/v1/views/${viewId}`),
+
+  shareView: (viewId: string) => apiPost<SavedView>(`/v1/views/${viewId}/share`, {}),
+
+  unshareView: (viewId: string) => apiDelete(`/v1/views/${viewId}/share`),
+
+  getSharedView: (slug: string) => apiGet<SharedViewPayload>(`/v1/shared/${slug}`),
 
   // ── Automations ───────────────────────────────────────────────────────────
 

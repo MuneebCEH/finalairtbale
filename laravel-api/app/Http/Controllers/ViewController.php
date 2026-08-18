@@ -83,6 +83,35 @@ class ViewController extends Controller
         return response()->noContent();
     }
 
+    /**
+     * POST /v1/views/{viewId}/share — mint (or return the existing) public slug. Anyone holding
+     * the slug can read the view's records without an account, so minting is an editor action
+     * and the slug is long enough to be unguessable.
+     */
+    public function share(Request $request, string $viewId)
+    {
+        $this->authorizeAction($request, 'view:update');
+        $view = $this->view($request);
+
+        if (! $view->share_slug) {
+            $view->share_slug = 'shr'.bin2hex(random_bytes(13));
+            $view->save();
+        }
+
+        return response()->json(['data' => $this->dto($view)]);
+    }
+
+    /** DELETE /v1/views/{viewId}/share — revoke the public link. */
+    public function unshare(Request $request, string $viewId)
+    {
+        $this->authorizeAction($request, 'view:update');
+        $view = $this->view($request);
+        $view->share_slug = null;
+        $view->save();
+
+        return response()->json(['data' => $this->dto($view)]);
+    }
+
     // ── Helpers ──────────────────────────────────────────────────────────────
 
     private function authorizeAction(Request $request, string $action): TenantContext
@@ -113,6 +142,7 @@ class ViewController extends Controller
             'type' => $view->type,
             'config' => $view->config,
             'position' => $view->position,
+            'shareSlug' => $view->share_slug,
             'createdAt' => $view->created_at?->toIso8601String(),
             'updatedAt' => $view->updated_at?->toIso8601String(),
         ];
