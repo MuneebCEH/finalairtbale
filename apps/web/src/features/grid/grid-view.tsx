@@ -486,6 +486,22 @@ export function GridView({
     },
   });
 
+  const renameField = useMutation({
+    mutationFn: ({ fieldId, name }: { fieldId: string; name: string }) =>
+      dataApi.updateField(tableId, fieldId, { name }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['fields', tableId] });
+    },
+  });
+
+  const removeField = useMutation({
+    mutationFn: (fieldId: string) => dataApi.deleteField(tableId, fieldId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['fields', tableId] });
+      await queryClient.invalidateQueries({ queryKey: ['records', tableId] });
+    },
+  });
+
   // Airtable lets a checkbox column pick its mark (⭐, ❤️, ✅…); the choice lives in the
   // field's options so every viewer of the table sees the same mark.
   const setCheckboxEmoji = useMutation({
@@ -501,6 +517,16 @@ export function GridView({
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['fields', tableId] });
+    },
+  });
+
+  // Airtable's "Duplicate record": a new record with the same field values, appearing via the
+  // same refetch path as Add record.
+  const duplicateRecord = useMutation({
+    mutationFn: (source: RecordRow) => dataApi.createRecords(tableId, [{ fields: source.fields }]),
+    onSuccess: async () => {
+      setExpanded(null);
+      await queryClient.invalidateQueries({ queryKey: ['records', tableId] });
     },
   });
 
@@ -855,6 +881,8 @@ export function GridView({
                 }}
                 onMove={moveColumn}
                 onSetEmoji={(fieldId, emoji) => setCheckboxEmoji.mutate({ fieldId, emoji })}
+                onRename={(fieldId, name) => renameField.mutate({ fieldId, name })}
+                onDelete={(fieldId) => removeField.mutate(fieldId)}
               />
             ))}
           </div>
@@ -971,6 +999,7 @@ export function GridView({
           tableName={tableName}
           onClose={() => setExpanded(null)}
           onCommitAt={commitAt}
+          onDuplicate={(source) => duplicateRecord.mutate(source)}
           onStep={(delta) =>
             setExpanded((current) => {
               if (current === null) return current;
@@ -1116,6 +1145,8 @@ function ColumnHeader({
   onDragEnd,
   onMove,
   onSetEmoji,
+  onRename,
+  onDelete,
 }: {
   field: Field;
   width: number;
@@ -1129,8 +1160,13 @@ function ColumnHeader({
   onDragEnd: () => void;
   onMove: (from: number, to: number) => void;
   onSetEmoji: (fieldId: string, emoji: string | null) => void;
+  onRename: (fieldId: string, name: string) => void;
+  onDelete: (fieldId: string) => void;
 }) {
   const [emojiOpen, setEmojiOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const [draftName, setDraftName] = useState(field.name);
   const currentEmoji = (field.options as { emoji?: string } | null)?.emoji;
   const startResize = (event: React.MouseEvent): void => {
     event.preventDefault();
@@ -1186,7 +1222,7 @@ function ColumnHeader({
       }}
       tabIndex={0}
       aria-label={`${field.name}, column ${index + 1}. Drag, or hold Alt and press the arrow keys, to reorder.`}
-      className={`relative flex shrink-0 cursor-grab items-center gap-1.5 border-r border-line px-2 outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+      className={`group/header relative flex shrink-0 cursor-grab items-center gap-1.5 border-r border-line px-2 outline-none focus-visible:ring-2 focus-visible:ring-accent ${
         isDragging ? 'opacity-40' : ''
       } ${isDropTarget ? 'border-l-2 border-l-accent' : ''}`}
       style={{ width }}
@@ -1201,9 +1237,94 @@ function ColumnHeader({
           ●
         </span>
       )}
+      {/* The field menu — rename or delete this column, Airtable's header dropdown. */}
+      <span className="relative ml-auto">
+        <button
+          type="button"
+          aria-label={`Field menu for ${field.name}`}
+          draggable={false}
+          onDragStart={(event) => event.preventDefault()}
+          onMouseDown={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            event.stopPropagation();
+            setMenuOpen((v) => !v);
+            setRenaming(false);
+            setDraftName(field.name);
+          }}
+          className={cn(
+            'rounded px-0.5 text-xs text-tertiary hover:bg-accent-subtle hover:text-accent-text',
+            !menuOpen && 'opacity-0 focus-visible:opacity-100 group-hover/header:opacity-100',
+          )}
+        >
+          ▾
+        </button>
+        {menuOpen && (
+          <span className="absolute right-0 top-full z-40 block w-48 rounded-md border border-line bg-surface p-1 font-normal normal-case shadow-lg">
+            {renaming ? (
+              <form
+                className="flex items-center gap-1 p-1"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  if (draftName.trim()) {
+                    onRename(field.id, draftName.trim());
+                    setMenuOpen(false);
+                  }
+                }}
+              >
+                <input
+                  autoFocus
+                  value={draftName}
+                  onMouseDown={(event) => event.stopPropagation()}
+                  onKeyDown={(event) => event.stopPropagation()}
+                  onChange={(event) => setDraftName(event.target.value)}
+                  aria-label="Field name"
+                  className="h-7 min-w-0 flex-1 rounded border border-line bg-surface px-1.5 text-sm text-primary"
+                />
+                <button type="submit" className="rounded bg-accent px-1.5 py-1 text-xs text-inverted">
+                  ✓
+                </button>
+              </form>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onMouseDown={(event) => event.stopPropagation()}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setRenaming(true);
+                  }}
+                  className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm text-primary hover:bg-sunken"
+                >
+                  ✎ Rename field
+                </button>
+                <button
+                  type="button"
+                  disabled={field.isPrimary}
+                  onMouseDown={(event) => event.stopPropagation()}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    if (window.confirm(`Delete the field “${field.name}” and its data in every record?`)) {
+                      onDelete(field.id);
+                    }
+                    setMenuOpen(false);
+                  }}
+                  className={cn(
+                    'flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm',
+                    field.isPrimary ? 'cursor-not-allowed opacity-50' : 'text-danger-text hover:bg-sunken',
+                  )}
+                >
+                  🗑 Delete field{field.isPrimary ? ' (primary)' : ''}
+                </button>
+              </>
+            )}
+          </span>
+        )}
+      </span>
+
       {/* Checkbox columns can pick their mark (Airtable's ⭐/❤️ style); everyone sees it. */}
       {field.type === 'checkbox' && (
-        <span className="relative ml-auto">
+        <span className="relative">
           <button
             type="button"
             aria-label={`Choose the mark for ${field.name}`}

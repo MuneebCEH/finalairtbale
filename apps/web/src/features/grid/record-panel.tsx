@@ -28,6 +28,7 @@ export function RecordPanel({
   onClose,
   onCommitAt,
   onStep,
+  onDuplicate,
 }: {
   record: RecordRow;
   recordIndex: number;
@@ -37,6 +38,8 @@ export function RecordPanel({
   onClose: () => void;
   onCommitAt: (row: number, column: number, value: unknown) => void;
   onStep: (delta: number) => void;
+  /** Optional — the grid passes it; other hosts of this panel may not offer duplication. */
+  onDuplicate?: (record: RecordRow) => void;
 }) {
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState('');
@@ -118,6 +121,16 @@ export function RecordPanel({
 
           <h2 className="min-w-0 flex-1 truncate text-base font-semibold text-primary">{title}</h2>
 
+          {onDuplicate && (
+            <button
+              type="button"
+              onClick={() => onDuplicate(record)}
+              className="rounded px-2 py-1 text-sm text-secondary hover:bg-sunken hover:text-primary"
+              title="Make a copy of this record"
+            >
+              ⧉ Duplicate
+            </button>
+          )}
           <button
             type="button"
             aria-label="Close"
