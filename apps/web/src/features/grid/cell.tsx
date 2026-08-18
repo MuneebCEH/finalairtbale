@@ -509,13 +509,19 @@ function AttachmentCell({
                 loading="lazy"
               />
             ) : isDoc ? (
-              // A miniature "page": faint text lines, the way Airtable's document thumbnails read
-              // at this size — honest about being a document without fetching the whole file.
-              <span aria-hidden="true" className={cn('flex w-full flex-col bg-white', wrap ? 'gap-1 p-1.5 pt-2' : 'gap-[2px] p-[3px] pt-1')}>
-                {[86, 70, 92, 60].slice(0, wrap ? 4 : 3).map((width, i) => (
-                  <span key={i} className="block h-[2px] rounded-full bg-slate-300" style={{ width: `${width}%` }} />
-                ))}
-              </span>
+              // The document's REAL first page (pre-rendered thumb), falling back to a drawn
+              // mini-page for files that have no thumbnail yet (fresh uploads).
+              <PdfThumb
+                url={file.url}
+                className="h-full w-full object-cover object-top"
+                fallback={
+                  <span aria-hidden="true" className={cn('flex w-full flex-col bg-white', wrap ? 'gap-1 p-1.5 pt-2' : 'gap-[2px] p-[3px] pt-1')}>
+                    {[86, 70, 92, 60].slice(0, wrap ? 4 : 3).map((width, i) => (
+                      <span key={i} className="block h-[2px] rounded-full bg-slate-300" style={{ width: `${width}%` }} />
+                    ))}
+                  </span>
+                }
+              />
             ) : (
               <span aria-hidden="true" className={cn('text-tertiary', wrap ? 'text-lg' : 'text-2xs')}>
                 {fileGlyph(file.mimeType)}
@@ -613,6 +619,35 @@ function AttachmentCell({
         />
       )}
     </span>
+  );
+}
+
+/**
+ * A PDF's real page-one thumbnail, Airtable-style: pre-rendered JPEGs live beside each file as
+ * `<name>.pdf.thumb.jpg`. A file without one (a fresh upload) falls back to the drawn mini-page,
+ * so the cell never shows a broken image.
+ */
+export function PdfThumb({
+  url,
+  className,
+  fallback,
+}: {
+  url: string;
+  className?: string;
+  fallback: React.ReactNode;
+}) {
+  const [failed, setFailed] = useState(false);
+
+  if (failed) return <>{fallback}</>;
+
+  return (
+    <img
+      src={`${url}.thumb.jpg`}
+      alt=""
+      loading="lazy"
+      onError={() => setFailed(true)}
+      className={className}
+    />
   );
 }
 

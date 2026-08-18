@@ -155,6 +155,29 @@ function formatBytes(size: number): string {
   return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+/** The gallery card's PDF face: the pre-rendered thumbnail, or the glyph when none exists. */
+function GalleryPdfThumb({ url }: { url: string }) {
+  const [failed, setFailed] = useState(false);
+
+  if (failed) {
+    return (
+      <span className="flex h-full items-center justify-center text-3xl" aria-hidden="true">
+        📄
+      </span>
+    );
+  }
+
+  return (
+    <img
+      src={`${url}.thumb.jpg`}
+      alt=""
+      loading="lazy"
+      onError={() => setFailed(true)}
+      className="h-full w-full object-cover object-top"
+    />
+  );
+}
+
 /**
  * Renders one file by what it actually is. PDFs go through an `<object>` — NOT a sandboxed
  * iframe: Chrome's built-in PDF viewer refuses to run inside `sandbox` and shows a broken page,
@@ -281,16 +304,9 @@ export function AttachmentGallery({
                 {file.url && (file.mimeType?.startsWith('image/') ? (
                   <img src={file.url} alt="" className="h-full w-full object-cover" loading="lazy" />
                 ) : file.mimeType === 'application/pdf' || file.filename.toLowerCase().endsWith('.pdf') ? (
-                  // A shrunken live render of the document — pointer-events off so the click
-                  // lands on the card, not inside the embedded viewer.
-                  <object
-                    data={`${file.url}#toolbar=0&view=FitH`}
-                    type="application/pdf"
-                    aria-hidden="true"
-                    className="pointer-events-none h-full w-full"
-                  >
-                    <span className="flex h-full items-center justify-center text-3xl">📄</span>
-                  </object>
+                  // The pre-rendered page-one thumbnail — a light image, not an embedded viewer;
+                  // files without one (fresh uploads) fall back to the document glyph.
+                  <GalleryPdfThumb url={file.url} />
                 ) : (
                   <span className="flex h-full items-center justify-center text-3xl" aria-hidden="true">
                     {file.mimeType?.startsWith('audio/') ? '🎙️' : file.mimeType?.startsWith('video/') ? '🎞️' : '📄'}
