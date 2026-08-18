@@ -32,6 +32,10 @@ const FIELD_TYPES = [
   { value: 'phone', label: 'Phone' },
   { value: 'rating', label: 'Rating' },
   { value: 'formula', label: 'Formula' },
+  { value: 'linkedRecord', label: 'Link to another table' },
+  { value: 'lookup', label: 'Lookup (via link)' },
+  { value: 'rollup', label: 'Rollup (via link)' },
+  { value: 'count', label: 'Count (via link)' },
 ] as const;
 
 /**
@@ -142,7 +146,12 @@ function BasePageInner() {
           {section === 'forms' && (
             <FormsSection tables={(tables.data ?? []).map((t) => ({ id: t.id, name: t.name }))} />
           )}
-          {section === 'interfaces' && <InterfacesSection />}
+          {section === 'interfaces' && (
+            <InterfacesSection
+              baseId={baseId}
+              tables={(tables.data ?? []).map((t) => ({ id: t.id, name: t.name }))}
+            />
+          )}
         </div>
       ) : (
         <>
@@ -220,6 +229,8 @@ function BasePageInner() {
         <AddFieldRow
           pending={createField.isPending}
           error={createField.error}
+          tableId={activeTableId}
+          tables={(tables.data ?? []).map((table) => ({ id: table.id, name: table.name }))}
           onCancel={() => setAddingField(false)}
           onSubmit={(input) => createField.mutate(input)}
         />
@@ -243,20 +254,62 @@ function BasePageInner() {
   );
 }
 
+/** Value types that live in the record's data — what a lookup/rollup can actually read. */
+const STORED_TYPES_ONLY = new Set(['lookup', 'rollup', 'count', 'formula', 'autoNumber', 'recordId', 'createdTime', 'lastModifiedTime', 'createdBy', 'lastModifiedBy', 'button']);
+
 function AddFieldRow({
   pending,
   error,
+  tableId,
+  tables,
   onCancel,
   onSubmit,
 }: {
   pending: boolean;
   error: unknown;
+  tableId: string;
+  /** The base's tables, for the "Link to table" target picker. */
+  tables: Array<{ id: string; name: string }>;
   onCancel: () => void;
   onSubmit: (input: { name: string; type: string; options?: Record<string, unknown> }) => void;
 }) {
   const [name, setName] = useState('');
   const [type, setType] = useState<string>('singleLineText');
   const [formula, setFormula] = useState('');
+  const [linkedTableId, setLinkedTableId] = useState('');
+  const [linkFieldId, setLinkFieldId] = useState('');
+  const [targetFieldId, setTargetFieldId] = useState('');
+  const [aggregation, setAggregation] = useState('sum');
+
+  // The current table's fields — the link-field picker for lookup/rollup/count.
+  const ownFields = useQuery({
+    queryKey: ['fields', tableId],
+    queryFn: () => dataApi.listFields(tableId),
+  });
+  const linkFields = (ownFields.data ?? []).filter(
+    (field) =>
+      (field.type === 'linkedRecord' || field.type === 'parentRecord') &&
+      (field.options as { linkedTableId?: string } | null)?.linkedTableId,
+  );
+  const chosenLink = linkFields.find((field) => field.id === linkFieldId);
+  const targetTableId = (chosenLink?.options as { linkedTableId?: string } | null)?.linkedTableId ?? '';
+
+  // The linked table's fields — the "which value to pull" picker.
+  const targetFields = useQuery({
+    queryKey: ['fields', targetTableId],
+    queryFn: () => dataApi.listFields(targetTableId),
+    enabled: targetTableId !== '',
+  });
+  const pullableFields = (targetFields.data ?? []).filter((field) => !STORED_TYPES_ONLY.has(field.type));
+
+  const needsLink = type === 'lookup' || type === 'rollup' || type === 'count';
+  const needsTarget = type === 'lookup' || type === 'rollup';
+  const incomplete =
+    !name.trim() ||
+    (type === 'formula' && !formula.trim()) ||
+    (type === 'linkedRecord' && !linkedTableId) ||
+    (needsLink && !linkFieldId) ||
+    (needsTarget && !targetFieldId);
 
   return (
     <div className="border-b border-line bg-sunken px-4 py-3">
@@ -270,8 +323,7 @@ function AddFieldRow({
         className="flex flex-wrap items-end gap-2"
         onSubmit={(event) => {
           event.preventDefault();
-          if (!name.trim()) return;
-          if (type === 'formula' && !formula.trim()) return;
+          if (incomplete) return;
           onSubmit({
             name: name.trim(),
             type,
@@ -288,6 +340,10 @@ function AddFieldRow({
                 }
               : {}),
             ...(type === 'formula' ? { options: { formula: formula.trim() } } : {}),
+            ...(type === 'linkedRecord' ? { options: { linkedTableId } } : {}),
+            ...(type === 'lookup' ? { options: { linkFieldId, targetFieldId } } : {}),
+            ...(type === 'rollup' ? { options: { linkFieldId, targetFieldId, aggregation } } : {}),
+            ...(type === 'count' ? { options: { linkFieldId } } : {}),
           });
           setName('');
           setFormula('');
@@ -333,12 +389,101 @@ function AddFieldRow({
           </label>
         )}
 
+        {type === 'linkedRecord' && (
+          <label className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-secondary">Table to link to</span>
+            <select
+              value={linkedTableId}
+              onChange={(event) => setLinkedTableId(event.target.value)}
+              aria-label="Table to link to"
+              className="h-8 rounded border border-line bg-surface px-2 text-sm text-primary"
+            >
+              <option value="">Pick a table…</option>
+              {tables.map((table) => (
+                <option key={table.id} value={table.id}>
+                  {table.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+
+        {needsLink &&
+          (linkFields.length === 0 ? (
+            <p className="pb-2 text-xs text-tertiary">
+              This table has no linked-record field yet — add a &ldquo;Link to another table&rdquo;
+              field first; {type} reads through it.
+            </p>
+          ) : (
+            <>
+              <label className="flex flex-col gap-1">
+                <span className="text-xs font-medium text-secondary">Via link field</span>
+                <select
+                  value={linkFieldId}
+                  onChange={(event) => {
+                    setLinkFieldId(event.target.value);
+                    setTargetFieldId('');
+                  }}
+                  aria-label="Via link field"
+                  className="h-8 rounded border border-line bg-surface px-2 text-sm text-primary"
+                >
+                  <option value="">Pick a link field…</option>
+                  {linkFields.map((field) => (
+                    <option key={field.id} value={field.id}>
+                      {field.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              {needsTarget && linkFieldId && (
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs font-medium text-secondary">
+                    {type === 'rollup' ? 'Field to aggregate' : 'Field to show'}
+                  </span>
+                  <select
+                    value={targetFieldId}
+                    onChange={(event) => setTargetFieldId(event.target.value)}
+                    aria-label={type === 'rollup' ? 'Field to aggregate' : 'Field to show'}
+                    className="h-8 rounded border border-line bg-surface px-2 text-sm text-primary"
+                  >
+                    <option value="">Pick a field…</option>
+                    {pullableFields.map((field) => (
+                      <option key={field.id} value={field.id}>
+                        {field.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+
+              {type === 'rollup' && (
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs font-medium text-secondary">Aggregation</span>
+                  <select
+                    value={aggregation}
+                    onChange={(event) => setAggregation(event.target.value)}
+                    aria-label="Aggregation"
+                    className="h-8 rounded border border-line bg-surface px-2 text-sm text-primary"
+                  >
+                    <option value="sum">Sum</option>
+                    <option value="avg">Average</option>
+                    <option value="min">Min</option>
+                    <option value="max">Max</option>
+                    <option value="count">Count linked</option>
+                    <option value="counta">Count non-empty</option>
+                  </select>
+                </label>
+              )}
+            </>
+          ))}
+
         <Button
           type="submit"
           size="sm"
           variant="primary"
           loading={pending}
-          disabled={!name.trim() || (type === 'formula' && !formula.trim())}
+          disabled={incomplete}
         >
           Add
         </Button>

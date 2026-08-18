@@ -137,14 +137,8 @@ export function FormsSection({ tables }: { tables: { id: string; name: string }[
   );
 }
 
-export function InterfacesSection() {
-  return (
-    <Empty
-      title="Interfaces are not available yet"
-      body="An interface is a purpose-built page over this base's data — a dashboard, a review queue, a record detail view. This section is a placeholder: nothing here is functional yet."
-    />
-  );
-}
+// The Interfaces section grew into a real dashboard designer; it lives in its own module now.
+export { InterfacesSection } from './interfaces';
 
 /**
  * An empty state that says what the thing is.

@@ -142,6 +142,10 @@ Route::prefix('v1')->group(function () {
             Route::post('records/{recordId}/comments', [CommentController::class, 'create']);
             Route::post('bases/{baseId}/attachments', [AttachmentController::class, 'upload']);
 
+            // ── Interfaces (per-base dashboards) ─────────────────────────────
+            Route::get('bases/{baseId}/interfaces', [\App\Http\Controllers\InterfaceController::class, 'show']);
+            Route::put('bases/{baseId}/interfaces', [\App\Http\Controllers\InterfaceController::class, 'update']);
+
             // ── Automations (Airtable-style: trigger + actions per table) ────
             Route::get('bases/{baseId}/automations', [AutomationController::class, 'list']);
             Route::post('bases/{baseId}/automations', [AutomationController::class, 'create']);

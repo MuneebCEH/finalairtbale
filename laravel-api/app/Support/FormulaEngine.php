@@ -23,12 +23,16 @@ final class FormulaEngine
     /** Formula-in-formula references are allowed, but only this deep. */
     private const MAX_DEPTH = 3;
 
-    /** @var array<string, array{formulas: array<string,string>, names: array<string,string>, types: array<string,string>}> */
+    /** @var array<string, array<string,mixed>> */
     private static array $cache = [];
 
     /**
-     * Compute every formula field of the table into each DTO's `fields`. DTO shape is the one
+     * Compute every derived field of the table into each DTO's `fields` — formulas, and the
+     * link-following family (lookup / rollup / count). DTO shape is the one
      * RecordController::dto builds; `fields` may be an array or the `(object)[]` empty cast.
+     *
+     * Link-derived values are computed BEFORE formulas, so a formula can reference a rollup by
+     * name ({Total Paid} * 1.1) and see its value.
      *
      * @param array<int, array<string,mixed>> $dtos
      * @return array<int, array<string,mixed>>
@@ -36,12 +40,36 @@ final class FormulaEngine
     public static function inject(string $tableId, array $dtos): array
     {
         $meta = self::tableMeta($tableId);
-        if ($meta['formulas'] === []) {
+        if ($meta['formulas'] === [] && $meta['derived'] === []) {
             return $dtos;
+        }
+
+        // One bulk load of every linked record this page references — never one query per cell.
+        $targetData = [];
+        if ($meta['derived'] !== []) {
+            $ids = [];
+            foreach ($dtos as $dto) {
+                $fields = (array) ($dto['fields'] ?? []);
+                foreach ($meta['derived'] as $spec) {
+                    foreach (RecordLinks::normalize($fields[$spec['link']] ?? null) as $id) {
+                        $ids[$id] = true;
+                    }
+                }
+            }
+            if ($ids !== []) {
+                $rows = \App\Models\Record::whereIn('id', array_keys($ids))
+                    ->whereNull('deleted_at')->get(['id', 'data']);
+                foreach ($rows as $row) {
+                    $targetData[$row->id] = (array) ($row->data ?? []);
+                }
+            }
         }
 
         foreach ($dtos as &$dto) {
             $fields = (array) ($dto['fields'] ?? []);
+            foreach ($meta['derived'] as $fieldId => $spec) {
+                $fields[$fieldId] = self::derive($spec, $fields, $targetData);
+            }
             foreach ($meta['formulas'] as $fieldId => $formula) {
                 $fields[$fieldId] = self::evaluate($formula, $fields, $meta, 0);
             }
@@ -49,6 +77,49 @@ final class FormulaEngine
         }
 
         return $dtos;
+    }
+
+    /** One lookup / rollup / count value for one record. */
+    private static function derive(array $spec, array $fields, array $targetData): mixed
+    {
+        $ids = RecordLinks::normalize($fields[$spec['link']] ?? null);
+
+        if ($spec['type'] === 'count') {
+            return count($ids);
+        }
+
+        // The linked records' values for the target field, blanks and structures dropped.
+        $values = [];
+        foreach ($ids as $id) {
+            $value = $targetData[$id][$spec['target']] ?? null;
+            if ($value !== null && $value !== '' && ! is_array($value) && ! is_object($value)) {
+                $values[] = $value;
+            }
+        }
+
+        if ($spec['type'] === 'lookup') {
+            return $values === [] ? null : implode(', ', array_map(strval(...), $values));
+        }
+
+        // Rollup: aggregate the numeric values.
+        $nums = array_map(floatval(...), array_filter($values, is_numeric(...)));
+        $result = match ($spec['agg']) {
+            'count' => count($ids),
+            'counta' => count($values),
+            'avg', 'average' => $nums === [] ? null : array_sum($nums) / count($nums),
+            'min' => $nums === [] ? null : min($nums),
+            'max' => $nums === [] ? null : max($nums),
+            default => array_sum($nums),
+        };
+
+        if (is_float($result)) {
+            $result = round($result, 8);
+            if ($result == floor($result) && abs($result) < 1e15) {
+                return (int) $result;
+            }
+        }
+
+        return $result;
     }
 
     /** One DTO — the create/update/show responses. */
@@ -84,20 +155,40 @@ final class FormulaEngine
             ->get(['id', 'name', 'type', 'options']);
 
         $formulas = [];
+        $derived = [];
         $names = [];
         $types = [];
         foreach ($fields as $f) {
             $names[$f->name] = $f->id;
             $types[$f->id] = $f->type;
+            $options = (array) ($f->options ?? []);
+
             if ($f->type === 'formula') {
-                $formula = (string) (((array) ($f->options ?? []))['formula'] ?? '');
+                $formula = (string) ($options['formula'] ?? '');
                 if (trim($formula) !== '') {
                     $formulas[$f->id] = $formula;
                 }
             }
+
+            // The link-following family. A spec without its link field is silently skipped — a
+            // half-configured field must never break the whole records read.
+            if (in_array($f->type, ['lookup', 'rollup', 'count'], true)) {
+                $link = (string) ($options['linkFieldId'] ?? '');
+                $target = (string) ($options['targetFieldId'] ?? '');
+                if ($link !== '' && ($f->type === 'count' || $target !== '')) {
+                    $derived[$f->id] = [
+                        'type' => $f->type,
+                        'link' => $link,
+                        'target' => $target,
+                        'agg' => strtolower((string) ($options['aggregation'] ?? 'sum')),
+                    ];
+                }
+            }
         }
 
-        return self::$cache[$tableId] = ['formulas' => $formulas, 'names' => $names, 'types' => $types];
+        return self::$cache[$tableId] = [
+            'formulas' => $formulas, 'derived' => $derived, 'names' => $names, 'types' => $types,
+        ];
     }
 
     private static function evaluate(string $formula, array $data, array $meta, int $depth): mixed
