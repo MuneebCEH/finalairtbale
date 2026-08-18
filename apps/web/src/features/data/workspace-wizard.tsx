@@ -8,6 +8,9 @@ import { Button } from '@/components/ui/button';
 import { Alert, Card } from '@/components/ui/feedback';
 import { dataApi } from '@/features/data/api';
 import { ApiError, apiPost } from '@/lib/api-client';
+import { cn } from '@/lib/cn';
+
+import { AiBuilderChat } from './ai-builder-chat';
 
 /**
  * The guided workspace creator, Airtable-style: name the workspace and base, say how many tables
@@ -73,6 +76,8 @@ export function WorkspaceWizard({
   const router = useRouter();
   const queryClient = useQueryClient();
 
+  // AI-first: describe it and it gets built. The manual form stays one tab away.
+  const [mode, setMode] = useState<'ai' | 'manual'>('ai');
   const [wsName, setWsName] = useState('');
   const [baseName, setBaseName] = useState('');
   const [tables, setTables] = useState<TableDraft[]>([{ name: 'Table 1', fields: '' }]);
@@ -141,12 +146,54 @@ export function WorkspaceWizard({
 
   return (
     <Card className="mt-6 p-5">
-      <h2 className="text-md font-semibold text-primary">New workspace</h2>
-      <p className="mt-1 text-sm text-secondary">
-        Say what you need — tables and their fields — and it will be built for you, with field
-        types worked out from the names.
-      </p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h2 className="text-md font-semibold text-primary">New workspace</h2>
+          <p className="mt-1 text-sm text-secondary">
+            {mode === 'ai'
+              ? 'Prompt likho — AI tables, fields, links, sample data aur dashboard sab bana dega.'
+              : 'Say what you need — tables and their fields — and it will be built for you.'}
+          </p>
+        </div>
+        <div className="flex rounded-lg border border-line p-0.5" role="tablist" aria-label="Builder mode">
+          {(
+            [
+              ['ai', '🤖 AI Builder'],
+              ['manual', '✎ Manual'],
+            ] as const
+          ).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              role="tab"
+              aria-selected={mode === value}
+              onClick={() => setMode(value)}
+              className={cn(
+                'rounded-md px-3 py-1.5 text-sm font-medium',
+                mode === value ? 'bg-accent text-inverted' : 'text-secondary hover:bg-sunken',
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
 
+      {mode === 'ai' ? (
+        <div className="mt-4">
+          <AiBuilderChat orgId={orgId} orgSlug={orgSlug} onClose={onClose} />
+        </div>
+      ) : (
+        // Plain expression, not a nested component: a component defined per-render would remount
+        // on every keystroke and drop the input focus.
+        manualBody()
+      )}
+    </Card>
+  );
+
+  function manualBody() {
+    return (
+      <>
       {build.error instanceof ApiError && (
         <Alert tone="danger" className="mt-3">
           {build.error.message}
@@ -241,6 +288,7 @@ export function WorkspaceWizard({
           </Button>
         </div>
       </form>
-    </Card>
-  );
+      </>
+    );
+  }
 }
